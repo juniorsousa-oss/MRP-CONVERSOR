@@ -53,6 +53,14 @@ def _normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
     return resultado
 
 
+def _validacao_erro(erros: list[str]) -> pd.DataFrame:
+    """Cria a tabela de validação sem erro de tamanho quando há várias mensagens."""
+    return pd.DataFrame({
+        "Status": ["ERRO"] * len(erros),
+        "Mensagem": erros,
+    })
+
+
 def preparar_analitico(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """Lê a estrutura do Analítico e consolida uma linha por produto."""
     erros: list[str] = []
@@ -128,7 +136,7 @@ def processar_estoque(
         return {
             "tratado": pd.DataFrame(),
             "enderecos": pd.DataFrame(),
-            "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}),
+            "validacao": _validacao_erro(erros),
             "erros": erros,
             "avisos": avisos,
             "metricas": {
