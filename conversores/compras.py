@@ -36,6 +36,15 @@ def _numeros_unicos(valores):
     return ", ".join(vistos) if vistos else "0"
 
 
+def _formatar_datas(base):
+    """Converte as datas de saída para o padrão brasileiro dd/mm/aaaa."""
+    for coluna in ["DATA DA S.C", "DATA DA P.C"]:
+        if coluna in base.columns:
+            base[coluna] = pd.to_datetime(base[coluna], errors="coerce").dt.strftime("%d/%m/%Y")
+            base[coluna] = base[coluna].fillna("")
+    return base
+
+
 def _agrupar_sc(df):
     dados = df.copy()
     # A = Numero SC, C = Produto, D = Descricao, G = Quantidade,
@@ -146,9 +155,13 @@ def _montar_base_comum(sc, pc, pn):
         "CÓD", "DESCRIÇÃO", "S.C", "QUANTIDADE S.C", "DATA DA S.C",
         "P.C", "QUANTIDADE P.C", "DATA DA P.C", "PRÉ-NOTA"
     ]
-    return base[colunas].sort_values(
+    base = base[colunas].sort_values(
         ["CÓD", "DATA DA S.C", "DATA DA P.C"], na_position="last"
     ).reset_index(drop=True)
+
+    # A saída do conversor deve mostrar somente a data, sem horário.
+    base = _formatar_datas(base)
+    return base
 
 
 def processar_compras(sc_bruto, pc_bruto, pre_nota_bruto):
