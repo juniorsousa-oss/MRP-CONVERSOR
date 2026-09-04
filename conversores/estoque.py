@@ -6,8 +6,9 @@ from typing import Any
 import pandas as pd
 
 
-COLUNAS_ANALITICO = ["CODIGO", "DESCRICAO", "SALDO EM ESTOQUE"]
-COLUNAS_ENDERECO = ["Produto", "Endereco", "Quantidade"]
+# Os relatórios do ERP são tratados pela POSIÇÃO das colunas, conforme definido:
+# Analítico: A=Cód Produto, D=Descrição, H=Saldo em Estoque
+# Endereço:  A=Cód Produto, D=Endereço,  H=Quantidade
 COLUNAS_SAIDA = [
     "COD_MATERIAL",
     "DESCRICAO",
@@ -28,84 +29,80 @@ def _normalizar_codigo(valor: Any, erros: list[str], linha: int, origem: str) ->
     if not texto:
         erros.append(f"{origem} - linha {linha}: código do produto vazio.")
         return ""
-
     if re.fullmatch(r"\d+\.0", texto):
         texto = texto[:-2]
-
     if not texto.isdigit():
         erros.append(f"{origem} - linha {linha}: código inválido ({texto!r}); esperado somente números.")
         return ""
-
     if len(texto) > 8:
         erros.append(f"{origem} - linha {linha}: código possui {len(texto)} dígitos; máximo permitido: 8.")
         return ""
-
     return texto.zfill(8)
 
 
 def _numero(serie: pd.Series) -> pd.Series:
-    return pd.to_numeric(serie, errors="coerce").fillna(0)
+    if pd.api.types.is_numeric_dtype(serie):
+        return pd.to_numeric(serie, errors="coerce").fillna(0)
+    texto = serie.astype(str).str.strip().str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    return pd.to_numeric(texto, errors="coerce").fillna(0)
 
 
-def _normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
-    resultado = df.copy()
-    resultado.columns = [str(c).strip() for c in resultado.columns]
-    return resultado
-
-
-def _validacao_erro(erros: list[str]) -> pd.DataFrame:
-    """Cria a tabela de validação sem erro de tamanho quando há várias mensagens."""
-    return pd.DataFrame({
-        "Status": ["ERRO"] * len(erros),
-        "Mensagem": erros,
-    })
+def _validar_posicoes(df: pd.DataFrame, quantidade_colunas: int, origem: str) -> list[str]:
+    if df.shape[1] < quantidade_colunas:
+        return [f"{origem}: o arquivo possui {df.shape[1]} coluna(s), mas são necessárias pelo menos {quantidade_colunas}."]
+    return []
 
 
 def preparar_analitico(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Lê a estrutura do Analítico e consolida uma linha por produto."""
+    """Lê A, D e H do Analítico e consolida uma linha por produto."""
     erros: list[str] = []
-    df = _normalizar_colunas(bruto)
-
-    faltantes = [c for c in COLUNAS_ANALITICO if c not in df.columns]
+    faltantes = _validar_posicoes(bruto, 8, "Analítico")
     if faltantes:
-        return pd.DataFrame(), ["Analítico: colunas obrigatórias ausentes: " + ", ".join(faltantes)]
+        return pd.DataFrame(), faltantes
 
-    codigos = []
-    for pos, valor in enumerate(df["CODIGO"], start=2):
-        codigos.append(_normalizar_codigo(valor, erros, pos, "Analítico"))
-    df["COD_MATERIAL"] = codigos
-    df["SALDO EM ESTOQUE"] = _numero(df["SALDO EM ESTOQUE"])
+    df = pd.DataFrame({
+        "COD_MATERIAL_BRUTO": bruto.iloc[:, 0],  # A - Cód Produto
+        "DESCRICAO": bruto.iloc[:, 3],          # D - Descrição
+        "SALDO_EM_ESTOQUE": bruto.iloc[:, 7],   # H - Saldo em Estoque
+    })
 
-    # O Analítico é a base. Se o ERP repetir um produto em mais de um armazém,
-    # os saldos são somados e a descrição é preservada.
+    df["COD_MATERIAL"] = [
+        _normalizar_codigo(valor, erros, pos, "Analítico")
+        for pos, valor in enumerate(df["COD_MATERIAL_BRUTO"], start=2)
+    ]
+    df["SALDO_EM_ESTOQUE"] = _numero(df["SALDO_EM_ESTOQUE"])
+
     agrupado = (
         df[df["COD_MATERIAL"] != ""]
         .groupby("COD_MATERIAL", sort=False, as_index=False)
         .agg(
-            DESCRICAO=("DESCRICAO", "first"),
-            SALDO_EM_ESTOQUE=("SALDO EM ESTOQUE", "sum"),
+            DESCRICAO=("DESCRICAO", lambda s: next((x for x in map(_texto, s) if x), "")),
+            SALDO_EM_ESTOQUE=("SALDO_EM_ESTOQUE", "sum"),
         )
     )
     return agrupado, erros
 
 
 def preparar_endereco(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Lê o relatório de Endereço e soma quantidade por produto/endereço."""
+    """Lê A, D e H do relatório de Endereço e soma quantidade por produto/endereço."""
     erros: list[str] = []
-    df = _normalizar_colunas(bruto)
-
-    faltantes = [c for c in COLUNAS_ENDERECO if c not in df.columns]
+    faltantes = _validar_posicoes(bruto, 8, "Endereço")
     if faltantes:
-        return pd.DataFrame(), ["Endereço: colunas obrigatórias ausentes: " + ", ".join(faltantes)]
+        return pd.DataFrame(), faltantes
 
-    codigos = []
-    for pos, valor in enumerate(df["Produto"], start=2):
-        codigos.append(_normalizar_codigo(valor, erros, pos, "Endereço"))
-    df["COD_MATERIAL"] = codigos
+    df = pd.DataFrame({
+        "COD_MATERIAL_BRUTO": bruto.iloc[:, 0],  # A - Cód Produto
+        "Endereco": bruto.iloc[:, 3],            # D - Endereço
+        "Quantidade": bruto.iloc[:, 7],          # H - Quantidade
+    })
+
+    df["COD_MATERIAL"] = [
+        _normalizar_codigo(valor, erros, pos, "Endereço")
+        for pos, valor in enumerate(df["COD_MATERIAL_BRUTO"], start=2)
+    ]
     df["Endereco"] = df["Endereco"].map(_texto)
     df["Quantidade"] = _numero(df["Quantidade"])
 
-    # Repetições do mesmo produto no mesmo endereço são somadas; nunca excluídas.
     agrupado = (
         df[(df["COD_MATERIAL"] != "") & (df["Endereco"] != "")]
         .groupby(["COD_MATERIAL", "Endereco"], sort=False, as_index=False)["Quantidade"]
@@ -127,7 +124,7 @@ def processar_estoque(
     erros.extend(erros_analitico)
     erros.extend(erros_endereco)
 
-    if analitico.empty:
+    if analitico.empty and not erros_analitico:
         erros.append("Analítico: nenhum produto válido foi encontrado após a padronização.")
     if endereco.empty and not erros_endereco:
         avisos.append("Endereço: nenhum registro válido foi encontrado.")
@@ -136,7 +133,7 @@ def processar_estoque(
         return {
             "tratado": pd.DataFrame(),
             "enderecos": pd.DataFrame(),
-            "validacao": _validacao_erro(erros),
+            "validacao": pd.DataFrame({"Status": ["ERRO"] * len(erros), "Mensagem": erros}),
             "erros": erros,
             "avisos": avisos,
             "metricas": {
@@ -150,13 +147,10 @@ def processar_estoque(
         }
 
     selecionados = {_texto(x) for x in enderecos_nao_disponiveis if _texto(x)}
-    enderecos_disponiveis_lista = sorted(endereco["Endereco"].dropna().unique().tolist())
-    desconhecidos = sorted(selecionados - set(enderecos_disponiveis_lista))
+    enderecos_presentes = set(endereco["Endereco"].dropna().unique().tolist()) if not endereco.empty else set()
+    desconhecidos = sorted(selecionados - enderecos_presentes)
     if desconhecidos:
-        avisos.append(
-            "Endereço(s) marcado(s) como não disponível(is) que não aparecem neste arquivo: "
-            + ", ".join(desconhecidos)
-        )
+        avisos.append("Endereço(s) marcado(s) como não disponível(is) que não aparecem neste arquivo: " + ", ".join(desconhecidos))
 
     nao_disp = endereco[endereco["Endereco"].isin(selecionados)]
     nao_disp_por_produto = (
@@ -167,25 +161,21 @@ def processar_estoque(
     tratado = analitico.merge(nao_disp_por_produto, on="COD_MATERIAL", how="left")
     tratado["SALDO_NAO_DISPONIVEL"] = tratado["SALDO_NAO_DISPONIVEL"].fillna(0)
 
-    # O Analítico é sempre a base. Se o endereço indicar mais indisponível que
-    # o saldo total, sinalizamos a inconsistência, mas o saldo disponível nunca
-    # ultrapassa a base nem fica negativo.
     mascara_inconsistencia = tratado["SALDO_NAO_DISPONIVEL"] > tratado["SALDO_EM_ESTOQUE"]
     qtd_inconsistencias = int(mascara_inconsistencia.sum())
     if qtd_inconsistencias:
         avisos.append(
-            f"{qtd_inconsistencias} produto(s) possuem quantidade em endereços não disponíveis "
-            "maior que o saldo do Analítico. O Analítico foi mantido como base e o saldo disponível "
-            "foi limitado a zero nesses casos."
+            f"{qtd_inconsistencias} produto(s) possuem quantidade em endereços não disponíveis maior que o saldo do Analítico. "
+            "O Analítico foi mantido como base e o saldo disponível foi limitado a zero nesses casos."
         )
 
+    # Regra definitiva: o Analítico é sempre a base e o saldo disponível nunca pode ser negativo.
     tratado["SALDO_DISPONIVEL"] = (
         tratado["SALDO_EM_ESTOQUE"] - tratado["SALDO_NAO_DISPONIVEL"]
     ).clip(lower=0)
     tratado = tratado[COLUNAS_SAIDA]
 
-    # Produtos que aparecem no Endereço mas não existem no Analítico.
-    produtos_endereco = set(endereco["COD_MATERIAL"])
+    produtos_endereco = set(endereco["COD_MATERIAL"]) if not endereco.empty else set()
     produtos_analitico = set(analitico["COD_MATERIAL"])
     somente_endereco = sorted(produtos_endereco - produtos_analitico)
     if somente_endereco:
