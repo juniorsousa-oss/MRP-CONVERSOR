@@ -1,6 +1,5 @@
 import io
 import json
-import base64
 from pathlib import Path
 
 import pandas as pd
@@ -14,9 +13,7 @@ st.set_page_config(page_title="MRP-CONVERSOR", page_icon="📊", layout="wide")
 st.title("MRP-CONVERSOR")
 st.caption("Conversão e validação de relatórios brutos do ERP para Excel tratado.")
 
-BASE_DIR = Path(__file__).parent
-CONFIG_ENDERECOS = BASE_DIR / "config" / "enderecos_nao_disponiveis.json"
-LOGO_PADRAO = BASE_DIR / "config" / "logo_setta.svg"
+CONFIG_ENDERECOS = Path(__file__).parent / "config" / "enderecos_nao_disponiveis.json"
 
 
 def carregar_enderecos_nao_disponiveis():
@@ -44,61 +41,7 @@ def ler_for022(arquivo):
     return pd.read_excel(arquivo, sheet_name="Datas esperadas", header=0)
 
 
-def svg_data_uri(caminho):
-    try:
-        conteudo = caminho.read_text(encoding="utf-8")
-        return "data:image/svg+xml;base64," + base64.b64encode(conteudo.encode("utf-8")).decode("ascii")
-    except OSError:
-        return ""
-
-
 with st.sidebar:
-    logo_largura = st.session_state.get("logo_largura", 280)
-    logo_distancia_topo = st.session_state.get("logo_distancia_topo", -20)
-    logo_upload = st.session_state.get("logo_upload_data")
-
-    with st.popover("⚙️", help="Configurar logo da empresa"):
-        st.markdown("**Identidade visual**")
-        novo_logo = st.file_uploader(
-            "Adicionar ou substituir logo",
-            type=["png", "jpg", "jpeg", "svg"],
-            key="logo_upload_widget",
-        )
-        if novo_logo is not None:
-            st.session_state["logo_upload_data"] = {
-                "bytes": novo_logo.getvalue(),
-                "mime": "image/svg+xml" if novo_logo.name.lower().endswith(".svg") else novo_logo.type,
-            }
-            logo_upload = st.session_state["logo_upload_data"]
-
-        st.markdown("**Tamanho da logo**")
-        logo_largura = st.slider(
-            "Largura (px)", min_value=80, max_value=340,
-            value=int(logo_largura), step=10, key="logo_largura"
-        )
-        st.markdown("**Posição vertical**")
-        logo_distancia_topo = st.slider(
-            "Distância do topo (px)", min_value=-120, max_value=120,
-            value=int(logo_distancia_topo), step=5,
-            help="Valores negativos aproximam a logo do topo.", key="logo_distancia_topo"
-        )
-
-    if logo_upload:
-        mime = logo_upload.get("mime", "image/png")
-        encoded = base64.b64encode(logo_upload["bytes"]).decode("ascii")
-        src = f"data:{mime};base64,{encoded}"
-    else:
-        src = svg_data_uri(LOGO_PADRAO)
-
-    if src:
-        st.markdown(
-            f'''<div style="margin-top:{logo_distancia_topo}px;width:100%;display:flex;justify-content:center;">
-            <img src="{src}" style="width:{logo_largura}px;max-width:100%;height:auto;object-fit:contain;display:block;">
-            </div>''',
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
         "Tipo de relatório",
@@ -113,23 +56,31 @@ if tipo_relatorio == "Relatório Geral":
     arquivo = st.file_uploader("Relatório Geral — aba 'Geral'", type=["xlsx", "xls", "xltx"], key="geral")
     for001_arquivo = st.file_uploader("FOR-001 — Plano Mestre de Produção", type=["xlsx", "xls", "xltx"], key="for001")
     for022_arquivo = st.file_uploader("FOR-022 — Planejamento Macro Produção", type=["xlsx", "xls", "xltx"], key="for022")
+
     if arquivo is not None and for001_arquivo is not None and for022_arquivo is not None:
         try:
             bruto = pd.read_excel(arquivo, sheet_name="Geral")
             for001_bruto = ler_for001(for001_arquivo)
             for022_bruto = ler_for022(for022_arquivo)
+        except ValueError as exc:
+            st.error(f"Não foi possível localizar a aba necessária nos arquivos: {exc}")
+            st.stop()
         except Exception as exc:
             st.error(f"Não foi possível ler os arquivos: {exc}")
             st.stop()
+
         c1, c2, c3 = st.columns(3)
         c1.metric("Linhas Relatório Geral", f"{len(bruto):,}".replace(",", "."))
         c2.metric("OPs FOR-001", f"{len(for001_bruto):,}".replace(",", "."))
         c3.metric("Linhas FOR-022", f"{len(for022_bruto):,}".replace(",", "."))
+
         st.subheader("2. Regras aplicadas")
-        st.info("FOR-001: OP → DATA MRP + CONDIÇÃO. NORMAL usa a DATA MRP para calcular a semana e entra na NECESSIDADE DA SEMANA. Condições diferentes de NORMAL permanecem visíveis no campo da semana, mas não entram no total. FOR-022: OP → DATA CM; OP não encontrada = NI.")
+        st.info("FOR-001: OP → DATA MRP + CONDIÇÃO. NORMAL usa a DATA MRP para calcular a semana e entra na NECESSIDADE DA SEMANA. Condições diferentes de NORMAL permanecem visíveis no campo da semana, mas não entram no total. FOR-022: OP → DATA CM (coluna Separação); OP não encontrada = NI.")
+
         if st.button("Processar relatório", type="primary", use_container_width=True, key="processar_geral"):
             with st.spinner("Processando, vinculando PCP e validando..."):
                 st.session_state["resultado_geral"] = processar_relatorio_geral(bruto, for001_bruto, for022_bruto)
+
     if "resultado_geral" in st.session_state:
         resultado = st.session_state["resultado_geral"]
         st.subheader("3. Resultado da conversão")
@@ -141,11 +92,14 @@ if tipo_relatorio == "Relatório Geral":
         c4.metric("Erros", str(metricas["erros"]))
         if resultado["erros"]:
             st.error("Foram encontradas inconsistências que precisam ser corrigidas antes da exportação.")
-            for erro in resultado["erros"]: st.write(f"- {erro}")
-        else: st.success("Validação concluída sem erros críticos.")
+            for erro in resultado["erros"]:
+                st.write(f"- {erro}")
+        else:
+            st.success("Validação concluída sem erros críticos.")
         if resultado["avisos"]:
             with st.expander(f"Avisos ({len(resultado['avisos'])})"):
-                for aviso in resultado["avisos"]: st.write(f"- {aviso}")
+                for aviso in resultado["avisos"]:
+                    st.write(f"- {aviso}")
         st.subheader("Prévia do relatório tratado")
         st.dataframe(resultado["tratado"].head(100), use_container_width=True, height=420)
         if not resultado["erros"]:
@@ -156,6 +110,7 @@ if tipo_relatorio == "Relatório Geral":
             buffer.seek(0)
             st.subheader("4. Exportar")
             st.download_button("Baixar Excel tratado", data=buffer, file_name="RelatorioGeral_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_geral")
+
 
 elif tipo_relatorio == "Saldo em Estoque":
     st.subheader("1. Enviar os dois relatórios brutos")
@@ -191,11 +146,14 @@ elif tipo_relatorio == "Saldo em Estoque":
         c4.metric("Erros estruturais", str(metricas["erros"]))
         if resultado["erros"]:
             st.error("Foram encontradas falhas estruturais. O arquivo não deve ser exportado.")
-            for erro in resultado["erros"]: st.write(f"- {erro}")
-        else: st.success("Conversão concluída. O Analítico foi mantido como base do saldo.")
+            for erro in resultado["erros"]:
+                st.write(f"- {erro}")
+        else:
+            st.success("Conversão concluída. O Analítico foi mantido como base do saldo.")
         if resultado["avisos"]:
             with st.expander(f"Avisos e inconsistências ({len(resultado['avisos'])})"):
-                for aviso in resultado["avisos"]: st.write(f"- {aviso}")
+                for aviso in resultado["avisos"]:
+                    st.write(f"- {aviso}")
         st.subheader("Prévia do saldo em estoque tratado")
         st.dataframe(resultado["tratado"].head(100), use_container_width=True, height=420)
         if not resultado["erros"]:
@@ -208,12 +166,14 @@ elif tipo_relatorio == "Saldo em Estoque":
             st.subheader("4. Exportar")
             st.download_button("Baixar Estoque tratado", data=buffer, file_name="Estoque_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_estoque")
 
+
 else:
     st.subheader("1. Enviar os três relatórios brutos")
     st.caption("Todos usam a segunda linha como cabeçalho. No P.C, somente a planilha '2-Pedido de Compras   Autoriz' é utilizada.")
     sc_arquivo = st.file_uploader("S.C — Solicitação de Compra", type=["xlsx", "xls", "xltx"], key="sc")
     pc_arquivo = st.file_uploader("P.C — Pedido de Compra", type=["xlsx", "xls", "xltx"], key="pc")
     pn_arquivo = st.file_uploader("Pré-nota", type=["xlsx", "xls", "xltx"], key="pre_nota")
+
     if sc_arquivo is not None and pc_arquivo is not None and pn_arquivo is not None:
         try:
             sc_bruto = ler_compras_como_cabecalho(sc_arquivo)
@@ -227,6 +187,7 @@ else:
         except Exception as exc:
             st.error(f"Não foi possível ler os relatórios de compras: {exc}")
             st.stop()
+
         st.subheader("2. Regras aplicadas")
         st.info("S.C: Centro de Custo 600307 + Saldo SC. P.C: Centro de Custo 600307 + (Quantidade - Qtd.Entregue). S.C e P.C são agrupados por produto e data de entrega; Pré-nota é somada somente por produto. Quantidades de S.C e P.C nunca são somadas entre si.")
         c1, c2, c3 = st.columns(3)
@@ -236,6 +197,7 @@ else:
         if st.button("Processar fluxo de compras", type="primary", use_container_width=True, key="processar_compras"):
             with st.spinner("Consolidando S.C, P.C e Pré-nota..."):
                 st.session_state["resultado_compras"] = processar_compras(sc_bruto, pc_bruto, pn_bruto)
+
     if "resultado_compras" in st.session_state:
         resultado = st.session_state["resultado_compras"]
         st.subheader("3. Resultado da conversão")
@@ -247,11 +209,14 @@ else:
         c4.metric("Inconsistências", str(metricas["inconsistencias"]))
         if resultado["erros"]:
             st.error("Foram encontradas falhas estruturais. O arquivo não deve ser exportado.")
-            for erro in resultado["erros"]: st.write(f"- {erro}")
-        else: st.success("Fluxo de compras convertido e validado.")
+            for erro in resultado["erros"]:
+                st.write(f"- {erro}")
+        else:
+            st.success("Fluxo de compras convertido e validado.")
         if resultado["avisos"]:
             with st.expander(f"Avisos e inconsistências ({len(resultado['avisos'])})"):
-                for aviso in resultado["avisos"]: st.write(f"- {aviso}")
+                for aviso in resultado["avisos"]:
+                    st.write(f"- {aviso}")
         st.subheader("Prévia da base comum")
         st.dataframe(resultado["tratado"].head(150), use_container_width=True, height=480)
         if not resultado["erros"]:
