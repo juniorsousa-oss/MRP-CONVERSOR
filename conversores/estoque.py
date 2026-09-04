@@ -51,7 +51,6 @@ def _validar_posicoes(df: pd.DataFrame, quantidade_colunas: int, origem: str) ->
 
 
 def preparar_analitico(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Lê A, D e H do Analítico e consolida uma linha por produto."""
     erros: list[str] = []
     faltantes = _validar_posicoes(bruto, 8, "Analítico")
     if faltantes:
@@ -81,7 +80,6 @@ def preparar_analitico(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
 
 def preparar_endereco(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Lê A, D e H do relatório de Endereço e soma quantidade por produto/endereço."""
     erros: list[str] = []
     faltantes = _validar_posicoes(bruto, 8, "Endereço")
     if faltantes:
@@ -148,37 +146,50 @@ def processar_estoque(
     desconhecidos = sorted(selecionados - enderecos_presentes)
     if desconhecidos:
         avisos.append(
-            "Endereço marcado como NÃO DISPONÍVEL, mas ausente neste relatório: "
+            "INCONSISTÊNCIA | Relatório com problema: ENDEREÇO | "
+            "Endereço(s) marcado(s) como NÃO DISPONÍVEL, mas ausente(s) neste relatório: "
             + ", ".join(desconhecidos)
         )
 
-    # SOMENTE os endereços efetivamente marcados pelo usuário entram no abatimento.
+    # REGRA FUNDAMENTAL:
+    # somente os endereços explicitamente marcados pelo usuário como NÃO DISPONÍVEIS
+    # podem compor SALDO_NAO_DISPONIVEL. Nenhum outro endereço é abatido.
     nao_disp = endereco[endereco["Endereco"].isin(selecionados)].copy()
+
     nao_disp_por_produto = (
-        nao_disp.groupby("COD_MATERIAL", as_index=False)["Quantidade"].sum()
+        nao_disp.groupby("COD_MATERIAL", as_index=False)["Quantidade"]
+        .sum()
         .rename(columns={"Quantidade": "SALDO_NAO_DISPONIVEL"})
     )
 
     tratado = analitico.merge(nao_disp_por_produto, on="COD_MATERIAL", how="left")
     tratado["SALDO_NAO_DISPONIVEL"] = tratado["SALDO_NAO_DISPONIVEL"].fillna(0)
 
-    # Esta coluna representa EXATAMENTE a soma das quantidades dos endereços
-    # que o usuário marcou como NÃO DISPONÍVEIS. Nenhum outro endereço entra aqui.
+    # A 4ª coluna é exatamente a soma das quantidades do relatório ENDEREÇO
+    # para os endereços marcados como NÃO DISPONÍVEIS, por código de material.
     mascara_inconsistencia = tratado["SALDO_NAO_DISPONIVEL"] > tratado["SALDO_EM_ESTOQUE"]
     qtd_inconsistencias = int(mascara_inconsistencia.sum())
 
     if qtd_inconsistencias:
         for _, row in tratado.loc[mascara_inconsistencia].iterrows():
+            codigo = row["COD_MATERIAL"]
+            enderecos_problema = nao_disp.loc[
+                nao_disp["COD_MATERIAL"] == codigo,
+                ["Endereco", "Quantidade"],
+            ]
+            detalhes_enderecos = "; ".join(
+                f"{r.Endereco}={r.Quantidade:g}" for r in enderecos_problema.itertuples(index=False)
+            )
             avisos.append(
-                "INCONSISTÊNCIA | "
-                f"Código {row['COD_MATERIAL']} | "
-                "Problema: quantidade dos endereços NÃO DISPONÍVEIS é maior que o saldo do Analítico | "
-                f"Analítico: {row['SALDO_EM_ESTOQUE']} | "
-                f"Endereço(s) não disponível(is): {row['SALDO_NAO_DISPONIVEL']} | "
-                "Regra aplicada: Analítico é a base; saldo disponível limitado a 0."
+                "INCONSISTÊNCIA | Relatórios com problema: ANALÍTICO + ENDEREÇO | "
+                f"Código: {codigo} | "
+                f"Analítico (Saldo em Estoque): {row['SALDO_EM_ESTOQUE']:g} | "
+                f"Endereço (soma dos marcados como NÃO DISPONÍVEIS): {row['SALDO_NAO_DISPONIVEL']:g} | "
+                f"Endereços considerados: {detalhes_enderecos} | "
+                "Regra aplicada: o Analítico é a base e o Saldo Disponível fica em 0."
             )
 
-    # Regra definitiva: o Analítico é sempre a base e o saldo disponível nunca pode ser negativo.
+    # O Analítico é sempre a base. Nunca permitir saldo disponível negativo.
     tratado["SALDO_DISPONIVEL"] = (
         tratado["SALDO_EM_ESTOQUE"] - tratado["SALDO_NAO_DISPONIVEL"]
     ).clip(lower=0)
@@ -189,8 +200,8 @@ def processar_estoque(
     somente_endereco = sorted(produtos_endereco - produtos_analitico)
     if somente_endereco:
         avisos.append(
-            "INCONSISTÊNCIA | Relatório ENDEREÇO | "
-            f"{len(somente_endereco)} código(s) aparecem no Endereço mas não no Analítico. "
+            "INCONSISTÊNCIA | Relatório com problema: ENDEREÇO | "
+            f"{len(somente_endereco)} código(s) aparecem no Endereço mas não no Analítico | "
             f"Códigos: {', '.join(somente_endereco)} | "
             "Regra aplicada: esses códigos não entram no estoque tratado, pois o Analítico é a base."
         )
