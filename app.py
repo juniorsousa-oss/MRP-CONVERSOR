@@ -42,21 +42,53 @@ def ler_for022(arquivo):
 
 
 with st.sidebar:
-    # Identidade visual: o controle de inclusão da logo fica oculto dentro de um pop-up.
-    c_logo, c_config = st.columns([5, 1], vertical_alignment="center")
-    with c_logo:
-        st.markdown("### Logo da empresa")
-    with c_config:
-        with st.popover("⚙️", help="Configurar logo da empresa"):
-            st.caption("Configuração da identidade visual")
-            logo_arquivo = st.file_uploader(
-                "Adicionar logo",
-                type=["png", "jpg", "jpeg"],
-                key="logo_empresa",
-            )
+    # Configuracao discreta da logo. O uploader fica somente dentro do popover.
+    logo_arquivo = st.session_state.get("logo_empresa")
+    logo_largura = st.session_state.get("logo_largura", 280)
+    logo_distancia_topo = st.session_state.get("logo_distancia_topo", -20)
+
+    with st.popover("⚙️", help="Configurar logo da empresa"):
+        st.markdown("**Identidade visual**")
+        novo_logo = st.file_uploader(
+            "Adicionar ou substituir logo",
+            type=["png", "jpg", "jpeg"],
+            key="logo_upload",
+        )
+        if novo_logo is not None:
+            st.session_state["logo_empresa"] = novo_logo
+            logo_arquivo = novo_logo
+
+        st.markdown("**Tamanho da logo**")
+        logo_largura = st.slider(
+            "Largura (px)",
+            min_value=80,
+            max_value=340,
+            value=int(logo_largura),
+            step=10,
+            key="logo_largura",
+        )
+
+        st.markdown("**Posição vertical**")
+        logo_distancia_topo = st.slider(
+            "Distância do topo (px)",
+            min_value=-80,
+            max_value=120,
+            value=int(logo_distancia_topo),
+            step=5,
+            help="Valores negativos aproximam a logo do topo da barra lateral.",
+            key="logo_distancia_topo",
+        )
 
     if logo_arquivo is not None:
-        st.image(logo_arquivo, use_container_width=True)
+        st.markdown(
+            f"""
+            <div style="margin-top:{logo_distancia_topo}px; width:100%; display:flex; justify-content:center;">
+                <img src="data:image/png;base64,{__import__('base64').b64encode(logo_arquivo.getvalue()).decode()}"
+                     style="width:{logo_largura}px; max-width:100%; height:auto; object-fit:contain; display:block;">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     else:
         st.caption("Nenhuma logo configurada.")
 
