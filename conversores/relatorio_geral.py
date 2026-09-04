@@ -123,18 +123,20 @@ def _semana_operacional(valor: Any, hoje: date) -> tuple[str, str]:
 
 
 def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
-    obrigatorias = ["ORDEM PRODUÇÃO", "DT MRP", "CONDIÇÃO"]
-    faltantes = [c for c in obrigatorias if c not in for001.columns]
-    if faltantes:
-        return None, [f"FOR-001: colunas ausentes: {', '.join(faltantes)}"]
+    # FOR-001: A = ORDEM DE PRODUÇÃO, M = DT MRP, N = CONDIÇÃO.
+    # O vínculo é feito pela posição das colunas, conforme definição do relatório,
+    # e não pelo texto do cabeçalho, evitando quebra por variação de nomenclatura.
+    if for001.shape[1] < 14:
+        return None, ["FOR-001: são necessárias pelo menos 14 colunas para acessar A, M e N."]
 
     base = for001.copy()
-    base["_OP"] = base["ORDEM PRODUÇÃO"].map(_normalizar_op)
-    base["_DT_MRP"] = pd.to_datetime(base["DT MRP"], errors="coerce", dayfirst=True)
-    base["_CONDICAO"] = base["CONDIÇÃO"].map(_texto).str.upper()
+    base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
+    base["_DT_MRP"] = pd.to_datetime(base.iloc[:, 12], errors="coerce", dayfirst=True)
+    base["_CONDICAO"] = base.iloc[:, 13].map(_texto).str.upper()
     base = base[base["_OP"] != ""].copy()
 
     registros = {}
+    conflitos = 0
     for _, row in base.iterrows():
         op = row["_OP"]
         dt_mrp = row["_DT_MRP"]
@@ -143,24 +145,32 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
         if atual is None:
             registros[op] = {"data_mrp": dt_mrp, "condicao": cond}
             continue
-        if pd.isna(atual["data_mrp"]) and not pd.isna(dt_mrp):
+
+        if not pd.isna(dt_mrp) and (pd.isna(atual["data_mrp"]) or dt_mrp != atual["data_mrp"]):
+            if not pd.isna(atual["data_mrp"]):
+                conflitos += 1
             atual["data_mrp"] = dt_mrp
-        if (not atual["condicao"] or atual["condicao"] == "-") and cond:
+
+        if cond and cond != "-" and cond != atual["condicao"]:
+            if atual["condicao"] and atual["condicao"] != "-":
+                conflitos += 1
             atual["condicao"] = cond
 
     avisos.append(f"FOR-001: {len(registros):,} OP(s) válidas carregadas para vínculo.".replace(",", "."))
+    if conflitos:
+        avisos.append(f"FOR-001: {conflitos} ocorrência(s) de OP com mais de uma DATA MRP/CONDIÇÃO; foi mantido o último registro válido encontrado.")
     return registros, []
 
 
 def _mapa_for022(for022: pd.DataFrame, avisos: list[str]):
-    obrigatorias = ["OP", "Separação"]
-    faltantes = [c for c in obrigatorias if c not in for022.columns]
-    if faltantes:
-        return None, [f"FOR-022: colunas ausentes: {', '.join(faltantes)}"]
+    # FOR-022: A = OP e AJ = SEPARAÇÃO.
+    # AJ é a 36ª coluna, índice 35.
+    if for022.shape[1] < 36:
+        return None, ["FOR-022: são necessárias pelo menos 36 colunas para acessar A e AJ."]
 
     base = for022.copy()
-    base["_OP"] = base["OP"].map(_normalizar_op)
-    base["_SEPARACAO"] = pd.to_datetime(base["Separação"], errors="coerce", dayfirst=True)
+    base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
+    base["_SEPARACAO"] = pd.to_datetime(base.iloc[:, 35], errors="coerce", dayfirst=True)
     base = base[base["_OP"] != ""].copy()
 
     registros = {}
@@ -171,6 +181,8 @@ def _mapa_for022(for022: pd.DataFrame, avisos: list[str]):
         if atual is None:
             registros[op] = separacao
         elif pd.isna(atual) and not pd.isna(separacao):
+            registros[op] = separacao
+        elif not pd.isna(separacao) and not pd.isna(atual) and separacao > atual:
             registros[op] = separacao
 
     avisos.append(f"FOR-022: {len(registros):,} OP(s) válidas carregadas para vínculo.".replace(",", "."))
@@ -188,17 +200,35 @@ def processar_relatorio_geral(
     faltantes = [col for col in COLUNAS_OBRIGATORIAS if col not in bruto.columns]
     if faltantes:
         erros.append("Colunas obrigatórias ausentes: " + ", ".join(faltantes))
-        return {"tratado": pd.DataFrame(), "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}), "erros": erros, "avisos": avisos, "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)}}
+        return {
+            "tratado": pd.DataFrame(),
+            "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}),
+            "erros": erros,
+            "avisos": avisos,
+            "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)},
+        }
 
     if for001 is None or for022 is None:
         erros.append("É obrigatório informar os relatórios FOR-001 e FOR-022.")
-        return {"tratado": pd.DataFrame(), "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}), "erros": erros, "avisos": avisos, "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)}}
+        return {
+            "tratado": pd.DataFrame(),
+            "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}),
+            "erros": erros,
+            "avisos": avisos,
+            "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)},
+        }
 
     mapa001, erros001 = _mapa_for001(for001, avisos)
     mapa022, erros022 = _mapa_for022(for022, avisos)
     erros.extend(erros001 + erros022)
     if erros:
-        return {"tratado": pd.DataFrame(), "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}), "erros": erros, "avisos": avisos, "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)}}
+        return {
+            "tratado": pd.DataFrame(),
+            "validacao": pd.DataFrame({"Status": ["ERRO"], "Mensagem": erros}),
+            "erros": erros,
+            "avisos": avisos,
+            "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)},
+        }
 
     df = bruto.copy()
     df.columns = [str(c).strip() for c in df.columns]
@@ -243,17 +273,23 @@ def processar_relatorio_geral(
     agrupado["Pendência"] = agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
     agrupado["_OP"] = agrupado["Projeto"].map(_normalizar_op)
 
-    agrupado["DATA MRP"] = agrupado["_OP"].map(lambda op: mapa001.get(op, {}).get("data_mrp", pd.NaT) if op else pd.NaT)
-    agrupado["_CONDICAO_PCP"] = agrupado["_OP"].map(lambda op: mapa001.get(op, {}).get("condicao", "") if op else "")
-    agrupado["DATA CM"] = agrupado["_OP"].map(lambda op: mapa022.get(op, pd.NaT) if op else pd.NaT)
+    agrupado["DATA MRP"] = agrupado["_OP"].map(
+        lambda op: mapa001.get(op, {}).get("data_mrp", pd.NaT) if op else pd.NaT
+    )
+    agrupado["_CONDICAO_PCP"] = agrupado["_OP"].map(
+        lambda op: mapa001.get(op, {}).get("condicao", "") if op else ""
+    )
+    agrupado["DATA CM"] = agrupado["_OP"].map(
+        lambda op: mapa022.get(op, pd.NaT) if op else pd.NaT
+    )
 
     def definir_semana(row):
         cond = _texto(row["_CONDICAO_PCP"]).upper()
         if cond == "NORMAL":
-            return _semana_operacional(row["DATA MRP"], date.today())
-        # Status textuais diferentes de NORMAL permanecem visíveis no campo.
-        # Valores vazios, '-' e valores que não representam uma palavra/status
-        # retornam SEM INFORMAÇÃO.
+            semana, periodo = _semana_operacional(row["DATA MRP"], date.today())
+            if semana:
+                return semana, periodo
+            return "SEM INFORMAÇÃO", ""
         if cond and cond != "-" and re.search(r"[A-ZÀ-Ý]", cond):
             return cond, ""
         return "SEM INFORMAÇÃO", ""
@@ -262,10 +298,10 @@ def processar_relatorio_geral(
     agrupado["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
     agrupado["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
 
-    # Somente demandas em condição NORMAL entram na necessidade semanal.
+    # Somente demandas NORMAL entram no total semanal.
     agrupado["_DEMANDA_VALIDADA"] = agrupado["_CONDICAO_PCP"].eq("NORMAL")
     agrupado["NECESSIDADE DA SEMANA"] = 0.0
-    mask_normal = agrupado["_DEMANDA_VALIDADA"] & agrupado["SEMANA DE NECESSIDADE"].ne("")
+    mask_normal = agrupado["_DEMANDA_VALIDADA"] & agrupado["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
     if mask_normal.any():
         agrupado.loc[mask_normal, "NECESSIDADE DA SEMANA"] = (
             agrupado.loc[mask_normal]
@@ -281,8 +317,12 @@ def processar_relatorio_geral(
     if sem_cm.any():
         avisos.append(f"{int(sem_cm.sum())} linha(s) não tiveram a OP identificada no FOR-022; DATA CM = NI.")
 
-    agrupado["DATA MRP"] = agrupado["DATA MRP"].map(lambda x: _data_exibicao(x) if not pd.isna(x) else "SEM INFORMAÇÃO")
-    agrupado["DATA CM"] = agrupado["DATA CM"].map(lambda x: _data_exibicao(x) if not pd.isna(x) else "NI")
+    agrupado["DATA MRP"] = agrupado["DATA MRP"].map(
+        lambda x: _data_exibicao(x) if not pd.isna(x) else "SEM INFORMAÇÃO"
+    )
+    agrupado["DATA CM"] = agrupado["DATA CM"].map(
+        lambda x: _data_exibicao(x) if not pd.isna(x) else "NI"
+    )
     agrupado = agrupado[COLUNAS_SAIDA]
 
     for col in ["Última solicitação", "Data de separação", "Data de conferência"]:
@@ -290,12 +330,14 @@ def processar_relatorio_geral(
 
     validacoes = []
     for cod, grupo in agrupado.groupby("COD_MRP", sort=False):
-        validacoes.append({
-            "COD_MRP": cod,
-            "Projeto válido": bool(re.fullmatch(r"\d{11}", str(grupo.iloc[0]["Projeto"]))),
-            "Código válido": bool(re.fullmatch(r"\d{8}", str(grupo.iloc[0]["Código"]))),
-            "Pendência recalculada": True,
-        })
+        validacoes.append(
+            {
+                "COD_MRP": cod,
+                "Projeto válido": bool(re.fullmatch(r"\d{11}", str(grupo.iloc[0]["Projeto"]))),
+                "Código válido": bool(re.fullmatch(r"\d{8}", str(grupo.iloc[0]["Código"]))),
+                "Pendência recalculada": True,
+            }
+        )
     validacao = pd.DataFrame(validacoes)
 
     invalidos = int((~validacao["Projeto válido"]).sum()) + int((~validacao["Código válido"]).sum())
@@ -309,4 +351,10 @@ def processar_relatorio_geral(
         "erros": len(erros),
     }
 
-    return {"tratado": agrupado, "validacao": validacao, "erros": erros, "avisos": avisos, "metricas": metricas}
+    return {
+        "tratado": agrupado,
+        "validacao": validacao,
+        "erros": erros,
+        "avisos": avisos,
+        "metricas": metricas,
+    }
