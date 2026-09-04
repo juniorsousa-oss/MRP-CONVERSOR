@@ -1,4 +1,6 @@
 import io
+import json
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -10,6 +12,18 @@ st.set_page_config(page_title="MRP-CONVERSOR", page_icon="📊", layout="wide")
 
 st.title("MRP-CONVERSOR")
 st.caption("Conversão e validação de relatórios brutos do ERP para Excel tratado.")
+
+CONFIG_ENDERECOS = Path(__file__).parent / "config" / "enderecos_nao_disponiveis.json"
+
+
+def carregar_enderecos_nao_disponiveis() -> list[str]:
+    try:
+        with CONFIG_ENDERECOS.open("r", encoding="utf-8") as arquivo:
+            dados = json.load(arquivo)
+        return [str(x).strip() for x in dados.get("enderecos_nao_disponiveis", []) if str(x).strip()]
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
 
 with st.sidebar:
     st.header("Configuração")
@@ -120,7 +134,6 @@ else:
             st.error(f"Não foi possível ler os relatórios: {exc}")
             st.stop()
 
-        # Mostra os endereços disponíveis para classificação.
         enderecos = (
             endereco_bruto.iloc[:, 3]
             .dropna()
@@ -130,12 +143,23 @@ else:
         enderecos = sorted([x for x in enderecos.unique().tolist() if x])
 
         st.subheader("2. Classificar endereços não disponíveis")
-        st.caption("Marque os endereços cuja quantidade deve ser abatida do Saldo em Estoque do Analítico.")
+        st.caption("Os endereços abaixo já vêm pré-selecionados pela configuração permanente do sistema. Você pode revisar a seleção antes de processar.")
+
+        enderecos_configurados = carregar_enderecos_nao_disponiveis()
+        selecionados_iniciais = [x for x in enderecos_configurados if x in enderecos]
+
         selecionados = st.multiselect(
             "Endereços considerados NÃO DISPONÍVEIS",
             options=enderecos,
+            default=selecionados_iniciais,
             key="enderecos_nao_disponiveis",
         )
+
+        if enderecos_configurados:
+            st.caption(
+                f"Configuração permanente carregada: {len(enderecos_configurados)} endereço(s). "
+                "A seleção acima é aplicada somente ao processamento atual."
+            )
 
         c1, c2 = st.columns(2)
         c1.metric("Linhas do Analítico", f"{len(analitico_bruto):,}".replace(",", "."))
