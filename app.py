@@ -42,6 +42,20 @@ def ler_for022(arquivo):
 
 
 with st.sidebar:
+    # Identidade visual: a logo pode ser carregada diretamente pela barra lateral.
+    st.markdown("### Logo da empresa")
+    logo_arquivo = st.file_uploader(
+        "Adicionar logo",
+        type=["png", "jpg", "jpeg"],
+        key="logo_empresa",
+        label_visibility="collapsed",
+    )
+    if logo_arquivo is not None:
+        st.image(logo_arquivo, use_container_width=True)
+    else:
+        st.caption("Envie uma imagem PNG ou JPG para exibir a logo aqui.")
+
+    st.divider()
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
         "Tipo de relatório",
