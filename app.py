@@ -20,8 +20,13 @@ with st.sidebar:
 
 
 def ler_primeira_linha_como_cabecalho(arquivo) -> pd.DataFrame:
-    """Lê relatórios ERP nos quais a primeira linha contém os nomes das colunas."""
+    """Mantido para compatibilidade com outros relatórios."""
     return pd.read_excel(arquivo, header=0)
+
+
+def ler_estoque_como_cabecalho(arquivo) -> pd.DataFrame:
+    """Lê relatórios de estoque em que a primeira linha é um título e a segunda é o cabeçalho."""
+    return pd.read_excel(arquivo, header=1)
 
 
 if tipo_relatorio == "Relatório Geral":
@@ -107,8 +112,10 @@ else:
 
     if analitico_arquivo is not None and endereco_arquivo is not None:
         try:
-            analitico_bruto = ler_primeira_linha_como_cabecalho(analitico_arquivo)
-            endereco_bruto = ler_primeira_linha_como_cabecalho(endereco_arquivo)
+            # Ambos os relatórios de estoque possuem uma linha inicial de título.
+            # A segunda linha contém o cabeçalho real; por isso header=1.
+            analitico_bruto = ler_estoque_como_cabecalho(analitico_arquivo)
+            endereco_bruto = ler_estoque_como_cabecalho(endereco_arquivo)
         except Exception as exc:
             st.error(f"Não foi possível ler os relatórios: {exc}")
             st.stop()
