@@ -47,8 +47,13 @@ def _domingo_da_semana(data_referencia):
 
 
 def _semana_atendimento(valor, hoje=None):
-    """Retorna semana/período usando a regra operacional domingo-sábado.
-    Se a data for anterior a hoje, considera a semana atual sem alterar a data original.
+    """Retorna semana/período pela regra domingo-sábado.
+
+    Regra operacional:
+    - data anterior a hoje -> semana atual;
+    - data de hoje/futura -> semana da própria data;
+    - a data original nunca é alterada;
+    - datas futuras anteriores ao primeiro domingo do ano ficam sem semana.
     """
     if hoje is None:
         hoje = date.today()
@@ -56,16 +61,19 @@ def _semana_atendimento(valor, hoje=None):
         return "", ""
 
     data_original = pd.Timestamp(valor).date()
-    primeiro_domingo = date(data_original.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-    if data_original < primeiro_domingo:
-        return "", ""
 
-    data_calculo = hoje if data_original < hoje else data_original
+    if data_original < hoje:
+        data_calculo = hoje
+    else:
+        data_calculo = data_original
+
     domingo = _domingo_da_semana(data_calculo)
     if domingo is None:
         return "", ""
+
+    primeiro_domingo = date(data_calculo.year, 1, 1)
+    while primeiro_domingo.weekday() != 6:
+        primeiro_domingo += timedelta(days=1)
 
     semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
     sabado = domingo + timedelta(days=6)
