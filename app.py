@@ -33,6 +33,14 @@ def ler_compras_como_cabecalho(arquivo, sheet_name=0):
     return pd.read_excel(arquivo, sheet_name=sheet_name, header=1)
 
 
+def ler_for001(arquivo):
+    return pd.read_excel(arquivo, sheet_name="PAINEL", header=4)
+
+
+def ler_for022(arquivo):
+    return pd.read_excel(arquivo, sheet_name="Datas esperadas", header=0)
+
+
 with st.sidebar:
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
@@ -43,22 +51,36 @@ with st.sidebar:
 
 
 if tipo_relatorio == "Relatório Geral":
-    st.subheader("1. Enviar relatório bruto")
-    arquivo = st.file_uploader("Selecione o arquivo Excel", type=["xlsx", "xls", "xltx"], key="geral")
-    if arquivo is not None:
+    st.subheader("1. Enviar os três relatórios brutos")
+    st.caption("O Relatório Geral recebe a DATA MRP e a condição do FOR-001 pela OP, e a DATA CM do FOR-022 pela OP.")
+    arquivo = st.file_uploader("Relatório Geral — aba 'Geral'", type=["xlsx", "xls", "xltx"], key="geral")
+    for001_arquivo = st.file_uploader("FOR-001 — Plano Mestre de Produção", type=["xlsx", "xls", "xltx"], key="for001")
+    for022_arquivo = st.file_uploader("FOR-022 — Planejamento Macro Produção", type=["xlsx", "xls", "xltx"], key="for022")
+
+    if arquivo is not None and for001_arquivo is not None and for022_arquivo is not None:
         try:
             bruto = pd.read_excel(arquivo, sheet_name="Geral")
-        except ValueError:
-            st.error("A planilha 'Geral' não foi encontrada no arquivo.")
+            for001_bruto = ler_for001(for001_arquivo)
+            for022_bruto = ler_for022(for022_arquivo)
+        except ValueError as exc:
+            st.error(f"Não foi possível localizar a aba necessária nos arquivos: {exc}")
             st.stop()
         except Exception as exc:
-            st.error(f"Não foi possível ler o arquivo: {exc}")
+            st.error(f"Não foi possível ler os arquivos: {exc}")
             st.stop()
-        st.subheader("2. Processar")
-        st.write(f"Linhas recebidas: **{len(bruto):,}**".replace(",", "."))
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Linhas Relatório Geral", f"{len(bruto):,}".replace(",", "."))
+        c2.metric("OPs FOR-001", f"{len(for001_bruto):,}".replace(",", "."))
+        c3.metric("Linhas FOR-022", f"{len(for022_bruto):,}".replace(",", "."))
+
+        st.subheader("2. Regras aplicadas")
+        st.info("FOR-001: OP → DATA MRP + CONDIÇÃO. NORMAL usa a DATA MRP para calcular a semana e entra na NECESSIDADE DA SEMANA. Condições diferentes de NORMAL permanecem visíveis no campo da semana, mas não entram no total. FOR-022: OP → DATA CM (coluna Separação); OP não encontrada = NI.")
+
         if st.button("Processar relatório", type="primary", use_container_width=True, key="processar_geral"):
-            with st.spinner("Processando e validando..."):
-                st.session_state["resultado_geral"] = processar_relatorio_geral(bruto)
+            with st.spinner("Processando, vinculando PCP e validando..."):
+                st.session_state["resultado_geral"] = processar_relatorio_geral(bruto, for001_bruto, for022_bruto)
+
     if "resultado_geral" in st.session_state:
         resultado = st.session_state["resultado_geral"]
         st.subheader("3. Resultado da conversão")
