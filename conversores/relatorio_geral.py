@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
@@ -29,6 +30,9 @@ COLUNAS_SAIDA = [
     "Data de separação",
     "Resp. conferência",
     "Data de conferência",
+    "SEMANA DE NECESSIDADE",
+    "PERIODO DA SEMANA",
+    "NECESSIDADE DA SEMANA",
 ]
 
 
@@ -85,6 +89,52 @@ def _nomes_unicos(grupo: pd.Series) -> str:
         if texto and texto not in nomes:
             nomes.append(texto)
     return " | ".join(nomes)
+
+
+def _domingo_da_semana(data_referencia: date) -> date | None:
+    """Retorna o domingo da semana operacional (domingo a sábado).
+
+    Datas anteriores ao primeiro domingo do ano são desconsideradas.
+    """
+    primeiro_domingo = date(data_referencia.year, 1, 1)
+    while primeiro_domingo.weekday() != 6:  # domingo = 6
+        primeiro_domingo += timedelta(days=1)
+
+    if data_referencia < primeiro_domingo:
+        return None
+
+    return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
+
+
+def _semana_operacional(valor: Any, hoje: date) -> tuple[str, str]:
+    """Calcula semana e período pela regra do MRP.
+
+    - Domingo inicia e sábado encerra a semana.
+    - Datas anteriores a hoje usam a semana atual.
+    - A data original permanece intacta no relatório.
+    - Datas anteriores ao primeiro domingo do ano não recebem semana.
+    """
+    if pd.isna(valor):
+        return "", ""
+
+    data_original = pd.Timestamp(valor).date()
+    primeiro_domingo = date(data_original.year, 1, 1)
+    while primeiro_domingo.weekday() != 6:
+        primeiro_domingo += timedelta(days=1)
+
+    if data_original < primeiro_domingo:
+        return "", ""
+
+    data_calculo = hoje if data_original < hoje else data_original
+    domingo = _domingo_da_semana(data_calculo)
+    if domingo is None:
+        return "", ""
+
+    # A semana é numerada a partir do primeiro domingo do ano.
+    semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
+    sabado = domingo + timedelta(days=6)
+
+    return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
 
 
 def processar_relatorio_geral(bruto: pd.DataFrame) -> dict[str, Any]:
@@ -156,6 +206,20 @@ def processar_relatorio_geral(bruto: pd.DataFrame) -> dict[str, Any]:
     )
 
     agrupado["Pendência"] = agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
+
+    # A semana de necessidade é determinada pela Última solicitação.
+    # Se a data já passou, usa-se a semana atual; a data original não é alterada.
+    hoje = date.today()
+    semanas = agrupado["Última solicitação"].map(lambda x: _semana_operacional(x, hoje))
+    agrupado["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
+    agrupado["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
+
+    # Soma da demanda do mesmo item (Código) dentro da semana de necessidade.
+    agrupado["NECESSIDADE DA SEMANA"] = (
+        agrupado.groupby(["Código", "SEMANA DE NECESSIDADE"], dropna=False)["Qtd. necessária"]
+        .transform("sum")
+    )
+
     agrupado = agrupado[COLUNAS_SAIDA]
 
     # Datas em formato de Excel amigável.
