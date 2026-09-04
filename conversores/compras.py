@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import date, timedelta
 
 CC_ALVO = "600307"
 
@@ -34,6 +35,62 @@ def _numeros_unicos(valores):
         if texto and texto not in vistos:
             vistos.append(texto)
     return ", ".join(vistos) if vistos else "0"
+
+
+def _domingo_da_semana(data_referencia):
+    primeiro_domingo = date(data_referencia.year, 1, 1)
+    while primeiro_domingo.weekday() != 6:
+        primeiro_domingo += timedelta(days=1)
+    if data_referencia < primeiro_domingo:
+        return None
+    return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
+
+
+def _semana_atendimento(valor, hoje=None):
+    """Retorna semana/período usando a regra operacional domingo-sábado.
+    Se a data for anterior a hoje, considera a semana atual sem alterar a data original.
+    """
+    if hoje is None:
+        hoje = date.today()
+    if pd.isna(valor) or _texto(valor) == "":
+        return "", ""
+
+    data_original = pd.Timestamp(valor).date()
+    primeiro_domingo = date(data_original.year, 1, 1)
+    while primeiro_domingo.weekday() != 6:
+        primeiro_domingo += timedelta(days=1)
+    if data_original < primeiro_domingo:
+        return "", ""
+
+    data_calculo = hoje if data_original < hoje else data_original
+    domingo = _domingo_da_semana(data_calculo)
+    if domingo is None:
+        return "", ""
+
+    semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
+    sabado = domingo + timedelta(days=6)
+    return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
+
+
+def _adicionar_info_semanal(base, coluna_data, coluna_quantidade, prefixo):
+    """Adiciona semana, período e total semanal sem alterar a data original."""
+    hoje = date.today()
+    semanas = base[coluna_data].map(lambda x: _semana_atendimento(x, hoje))
+    base[f"SEMANA DE ATENDIMENTO {prefixo}"] = semanas.map(lambda x: x[0])
+    base[f"PERIODO DA SEMANA {prefixo}"] = semanas.map(lambda x: x[1])
+
+    base[f"QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA {prefixo}"] = 0.0
+    mask = (
+        base[coluna_data].notna()
+        & base[f"SEMANA DE ATENDIMENTO {prefixo}"].str.match(r"^\d{2}$", na=False)
+    )
+    if mask.any():
+        base.loc[mask, f"QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA {prefixo}"] = (
+            base.loc[mask]
+            .groupby(["CÓD", f"SEMANA DE ATENDIMENTO {prefixo}"])[coluna_quantidade]
+            .transform("sum")
+        )
+    return base
 
 
 def _formatar_datas(base):
@@ -159,6 +216,27 @@ def _montar_base_comum(sc, pc, pn):
         ["CÓD", "DATA DA S.C", "DATA DA P.C"], na_position="last"
     ).reset_index(drop=True)
 
+    # Datas das linhas sem SC/PC permanecem vazias; suas semanas também.
+    base["DATA DA S.C"] = pd.to_datetime(base["DATA DA S.C"], errors="coerce")
+    base["DATA DA P.C"] = pd.to_datetime(base["DATA DA P.C"], errors="coerce")
+
+    # Semana/período/total são calculados separadamente para SC e PC.
+    base = _adicionar_info_semanal(base, "DATA DA S.C", "QUANTIDADE S.C", "S.C")
+    base = _adicionar_info_semanal(base, "DATA DA P.C", "QUANTIDADE P.C", "P.C")
+
+    # A ordem final coloca as três informações logo após cada data.
+    colunas = [
+        "CÓD", "DESCRIÇÃO",
+        "S.C", "QUANTIDADE S.C", "DATA DA S.C",
+        "SEMANA DE ATENDIMENTO S.C", "PERIODO DA SEMANA S.C",
+        "QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA S.C",
+        "P.C", "QUANTIDADE P.C", "DATA DA P.C",
+        "SEMANA DE ATENDIMENTO P.C", "PERIODO DA SEMANA P.C",
+        "QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA P.C",
+        "PRÉ-NOTA",
+    ]
+    base = base[colunas]
+
     # A saída do conversor deve mostrar somente a data, sem horário.
     base = _formatar_datas(base)
     return base
@@ -188,6 +266,8 @@ def processar_compras(sc_bruto, pc_bruto, pre_nota_bruto):
     validacao = pd.DataFrame([
         {"TIPO": "INFO", "MENSAGEM": "Filtro: Centro de Custo = 600307 em S.C e P.C."},
         {"TIPO": "INFO", "MENSAGEM": "S.C: Saldo SC. P.C: Quantidade - Qtd.Entregue. Pré-nota: soma por produto."},
+        {"TIPO": "INFO", "MENSAGEM": "Datas anteriores a hoje usam a semana atual sem alterar a data original."},
+        {"TIPO": "INFO", "MENSAGEM": "Semana/período/total de atendimento são calculados separadamente para S.C e P.C."},
         {"TIPO": "INFO", "MENSAGEM": f"S.C após filtro/abertos: {len(sc)} linhas agrupadas."},
         {"TIPO": "INFO", "MENSAGEM": f"P.C após filtro/saldo positivo: {len(pc)} linhas agrupadas."},
     ] + [
