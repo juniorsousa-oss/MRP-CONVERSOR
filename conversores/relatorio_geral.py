@@ -273,8 +273,14 @@ def processar_relatorio_geral(
     agrupado["Pendência"] = agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
     agrupado["_OP"] = agrupado["Projeto"].map(_normalizar_op)
 
+    # DATA MRP = DT MRP do FOR-001 menos 30 dias.
+    # A semana de necessidade é calculada sobre essa nova data.
     agrupado["DATA MRP"] = agrupado["_OP"].map(
-        lambda op: mapa001.get(op, {}).get("data_mrp", pd.NaT) if op else pd.NaT
+        lambda op: (
+            mapa001.get(op, {}).get("data_mrp", pd.NaT) - pd.Timedelta(days=30)
+            if op and not pd.isna(mapa001.get(op, {}).get("data_mrp", pd.NaT))
+            else pd.NaT
+        )
     )
     agrupado["_CONDICAO_PCP"] = agrupado["_OP"].map(
         lambda op: mapa001.get(op, {}).get("condicao", "") if op else ""
