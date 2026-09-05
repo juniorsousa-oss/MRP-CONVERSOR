@@ -8,6 +8,7 @@ import streamlit as st
 from conversores.estoque import processar_estoque
 from conversores.relatorio_geral import processar_relatorio_geral
 from conversores.compras import processar_compras
+from conversores.tc_tp import processar_tc_tp
 
 st.set_page_config(page_title="MRP-CONVERSOR", page_icon="📊", layout="wide")
 st.title("MRP-CONVERSOR")
@@ -45,7 +46,12 @@ with st.sidebar:
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
         "Tipo de relatório",
-        ["Relatório Geral", "Saldo em Estoque", "Compras — S.C + P.C + Pré-nota"],
+        [
+            "Relatório Geral",
+            "Saldo em Estoque",
+            "Compras — S.C + P.C + Pré-nota",
+            "MRP — TC/TP",
+        ],
     )
     st.info("O conversor não calcula MRP. Ele transforma, agrupa, valida e exporta os dados para uso posterior.")
 
@@ -167,7 +173,7 @@ elif tipo_relatorio == "Saldo em Estoque":
             st.download_button("Baixar Estoque tratado", data=buffer, file_name="Estoque_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_estoque")
 
 
-else:
+elif tipo_relatorio == "Compras — S.C + P.C + Pré-nota":
     st.subheader("1. Enviar os três relatórios brutos")
     st.caption("Todos usam a segunda linha como cabeçalho. No P.C, somente a planilha '2-Pedido de Compras   Autoriz' é utilizada.")
     sc_arquivo = st.file_uploader("S.C — Solicitação de Compra", type=["xlsx", "xls", "xltx"], key="sc")
@@ -227,3 +233,79 @@ else:
             buffer.seek(0)
             st.subheader("4. Exportar")
             st.download_button("Baixar Compras tratado", data=buffer, file_name="Compras_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_compras")
+
+
+else:
+    st.subheader("1. Enviar os dois relatórios brutos")
+    st.caption("O PMP_ATUALIZADO define as OFs programadas e o H001 fornece a BOM fixa de cada produto intermediário.")
+
+    pmp_arquivo = st.file_uploader(
+        "PMP_ATUALIZADO — programação de OFs",
+        type=["xlsx", "xls", "xltx"],
+        key="pmp_tc_tp",
+    )
+    h001_arquivo = st.file_uploader(
+        "H001 — lista de materiais (BOM)",
+        type=["xlsx", "xls", "xltx"],
+        key="h001_tc_tp",
+    )
+
+    if pmp_arquivo is not None and h001_arquivo is not None:
+        try:
+            pmp_bruto = pd.read_excel(pmp_arquivo)
+            h001_bruto = pd.read_excel(h001_arquivo)
+        except Exception as exc:
+            st.error(f"Não foi possível ler os relatórios de TC/TP: {exc}")
+            st.stop()
+
+        c1, c2 = st.columns(2)
+        c1.metric("Linhas PMP", f"{len(pmp_bruto):,}".replace(",", "."))
+        c2.metric("Linhas H001", f"{len(h001_bruto):,}".replace(",", "."))
+
+        st.subheader("2. Regras aplicadas")
+        st.info(
+            "PMP: somente STATUS = PROGRAMADO. Cada OF programada representa 1 unidade do produto. "
+            "A coluna P (CÓDIGO UNIFICADO) faz a junção com H001 coluna F. "
+            "A BOM vem de H001: H = MATERIAL, I = DESCRIÇÃO MATERIAL, L = QUANTIDADE. "
+            "A DATA DE NECESSIDADE é DATA DE ENTREGA do PMP menos 30 dias. "
+            "A semana é domingo a sábado e a NECESSIDADE DA SEMANA é a soma do material para a mesma semana."
+        )
+
+        if st.button("Processar MRP — TC/TP", type="primary", use_container_width=True, key="processar_tc_tp"):
+            with st.spinner("Limpando PMP, expandindo BOM e calculando necessidades semanais..."):
+                st.session_state["resultado_tc_tp"] = processar_tc_tp(pmp_bruto, h001_bruto)
+
+    if "resultado_tc_tp" in st.session_state:
+        resultado = st.session_state["resultado_tc_tp"]
+        st.subheader("3. Resultado da conversão")
+        metricas = resultado["metricas"]
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("OFs programadas", f"{metricas['ofs_programadas']:,}".replace(",", "."))
+        c2.metric("OFs com BOM", f"{metricas['ofs_com_bom']:,}".replace(",", "."))
+        c3.metric("Materiais únicos", f"{metricas['materiais_unicos']:,}".replace(",", "."))
+        c4.metric("Avisos", str(metricas["avisos"]))
+
+        if resultado["avisos"]:
+            with st.expander(f"Avisos e inconsistências ({len(resultado['avisos'])})", expanded=True):
+                for aviso in resultado["avisos"]:
+                    st.write(f"- {aviso}")
+        else:
+            st.success("Conversão concluída sem avisos.")
+
+        st.subheader("Prévia do MRP — TC/TP")
+        st.dataframe(resultado["tratado"].head(150), use_container_width=True, height=480)
+
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            resultado["tratado"].to_excel(writer, sheet_name="MRP_TC_TP", index=False)
+            resultado["validacao"].to_excel(writer, sheet_name="Validacao", index=False)
+        buffer.seek(0)
+        st.subheader("4. Exportar")
+        st.download_button(
+            "Baixar MRP TC/TP tratado",
+            data=buffer,
+            file_name="MRP_TC_TP_Tratado.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="download_tc_tp",
+        )
