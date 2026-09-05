@@ -166,23 +166,20 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     base.drop(columns=["_merge"], inplace=True)
 
     # Cada OF programada representa 1 unidade do produto intermediário.
-    # A quantidade da BOM é, portanto, a necessidade do componente por OF.
+    # A quantidade da BOM é a necessidade do componente por OF.
     base["DATA DE NECESSIDADE"] = base["DATA DE ENTREGA"].map(
         lambda x: x - pd.Timedelta(days=30) if pd.notna(x) else pd.NaT
     )
 
     hoje = date.today()
+
+    # Planejamento de entrega do produto intermediário.
     semanas_entrega = base["DATA DE ENTREGA"].map(lambda x: _semana(x, hoje))
     base["SEMANA DE ENTREGA"] = semanas_entrega.map(lambda x: x[0])
     base["PERIODO DA SEMANA DE ENTREGA"] = semanas_entrega.map(lambda x: x[1])
 
-    semanas_necessidade = base["DATA DE NECESSIDADE"].map(lambda x: _semana(x, hoje))
-    base["SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[0])
-    base["PERIODO DA SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[1])
-
-    # A quantidade total prevista de entrega é a quantidade de OFs do produto
-    # naquela semana. O cálculo é feito antes da expansão da BOM, para não
-    # contar uma mesma OF várias vezes (uma vez por material).
+    # A quantidade total prevista de entrega é calculada por produto + semana,
+    # contando cada OF uma única vez, antes da expansão da BOM.
     base["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = 0.0
     mask_entrega = base["SEMANA DE ENTREGA"].str.match(r"^\d{2}$", na=False)
     entrega_unica = base.loc[
@@ -207,6 +204,24 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
             "QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"
         ].fillna(0)
 
+    # Semana de necessidade dos componentes: data de entrega menos 30 dias.
+    semanas_necessidade = base["DATA DE NECESSIDADE"].map(lambda x: _semana(x, hoje))
+    base["SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[0])
+    base["PERIODO DA SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[1])
+
+    # Necessidade total do material na semana = soma das quantidades da BOM
+    # para todas as OFs que demandam aquele material naquela semana.
+    base["NECESSIDADE TOTAL DA SEMANA"] = 0.0
+    mask_necessidade = base["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
+    if mask_necessidade.any():
+        base.loc[mask_necessidade, "NECESSIDADE TOTAL DA SEMANA"] = (
+            base.loc[mask_necessidade]
+            .groupby(["MATERIAL", "SEMANA DE NECESSIDADE"])["QUANTIDADE POR OF"]
+            .transform("sum")
+        )
+
+    # Layout: após a quantidade total prevista de entrega, manter a sequência
+    # da imagem de referência e deixar a necessidade total semanal por último.
     colunas = [
         "ORDEM DE PRODUÇÃO",
         "CÓDIGO PRODUTO",
@@ -221,6 +236,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         "MATERIAL",
         "DESCRIÇÃO MATERIAL",
         "QUANTIDADE POR OF",
+        "NECESSIDADE TOTAL DA SEMANA",
     ]
     base = base[colunas].sort_values(
         ["DATA DE ENTREGA", "MATERIAL", "ORDEM DE PRODUÇÃO"],
