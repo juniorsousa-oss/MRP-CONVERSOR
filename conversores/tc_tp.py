@@ -184,8 +184,9 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     # naquela semana. O cálculo é feito antes da expansão da BOM, para não
     # contar uma mesma OF várias vezes (uma vez por material).
     base["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = 0.0
+    mask_entrega = base["SEMANA DE ENTREGA"].str.match(r"^\d{2}$", na=False)
     entrega_unica = base.loc[
-        mask_entrega := base["SEMANA DE ENTREGA"].str.match(r"^\d{2}$", na=False),
+        mask_entrega,
         ["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "SEMANA DE ENTREGA"],
     ].drop_duplicates()
 
@@ -234,12 +235,20 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         avisos.append(
             f"{len(sem_codigo)} OF(s) programada(s) não conseguiram localizar o código da coluna P nem o código alternativo da coluna C no H001."
         )
+        for _, row in sem_codigo.iterrows():
+            avisos.append(
+                f"OF {row['ORDEM DE PRODUÇÃO']} — código P: {row['CÓDIGO UNIFICADO'] or 'NÃO INFORMADO'} — código C: {row['CÓDIGO ALTERNATIVO'] or 'NÃO INFORMADO'} — nenhum dos dois foi localizado no H001."
+            )
 
     recuperadas_por_c = pmp[pmp["FONTE CÓDIGO"] == "C"]
     if not recuperadas_por_c.empty:
         avisos.append(
             f"{len(recuperadas_por_c)} OF(s) foram vinculadas pelo código da coluna C porque o código da coluna P não foi localizado no H001."
         )
+        for _, row in recuperadas_por_c.iterrows():
+            avisos.append(
+                f"OF {row['ORDEM DE PRODUÇÃO']} — código P: {row['CÓDIGO UNIFICADO'] or 'NÃO INFORMADO'} — vinculado pelo código C: {row['CÓDIGO ALTERNATIVO']}."
+            )
 
     if not sem_bom.empty:
         avisos.append(
