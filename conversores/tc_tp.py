@@ -35,8 +35,8 @@ def _domingo_da_semana(data_referencia):
     return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
 
 
-def _semana_necessidade(valor, hoje=None):
-    """Calcula semana domingo-sábado sem alterar a data original."""
+def _semana(valor, hoje=None):
+    """Calcula semana domingo-sábado. Mantém a data original intacta."""
     if hoje is None:
         hoje = date.today()
     if pd.isna(valor) or _texto(valor) == "":
@@ -44,7 +44,6 @@ def _semana_necessidade(valor, hoje=None):
 
     data_original = pd.Timestamp(valor).date()
     data_calculo = hoje if data_original < hoje else data_original
-
     domingo = _domingo_da_semana(data_calculo)
     if domingo is None:
         return "", ""
@@ -58,40 +57,56 @@ def _semana_necessidade(valor, hoje=None):
     return f"{numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
 
 
-def _normalizar_colunas(df, nomes_esperados, nome_arquivo):
-    if df.shape[1] < max(nomes_esperados.values()) + 1:
+def _normalizar_colunas(df, colunas_esperadas, nome_arquivo):
+    if df.shape[1] < max(colunas_esperadas.values()) + 1:
         raise ValueError(
             f"{nome_arquivo}: quantidade de colunas insuficiente. "
-            f"Esperadas pelo menos {max(nomes_esperados.values()) + 1} colunas."
+            f"Esperadas pelo menos {max(colunas_esperadas.values()) + 1} colunas."
         )
 
 
-def _preparar_pmp(pmp):
-    # PMP: A=Ordem, D=Descrição, L=Data Entrega, O=Status, P=Código Unificado.
+def _preparar_pmp(pmp, codigos_h001):
+    # PMP: A=Ordem, C=Código alternativo, D=Descrição, L=Data Entrega,
+    # O=Status, P=Código Unificado.
     _normalizar_colunas(
         pmp,
-        {"ordem": 0, "descricao": 3, "data_entrega": 11, "status": 14, "unificado": 15},
+        {"ordem": 0, "codigo_alternativo": 2, "descricao": 3, "data_entrega": 11, "status": 14, "unificado": 15},
         "PMP_ATUALIZADO",
     )
 
     dados = pmp.copy()
     dados["STATUS"] = dados.iloc[:, 14].map(_texto).str.upper()
-    # Pré-limpeza: somente OFs em aberto/programadas.
+    # Pré-limpeza: somente OFs com STATUS = PROGRAMADO.
     dados = dados[dados["STATUS"] == "PROGRAMADO"].copy()
 
     dados["ORDEM DE PRODUÇÃO"] = dados.iloc[:, 0].map(_texto)
+    dados["CÓDIGO ALTERNATIVO"] = dados.iloc[:, 2].map(_codigo)
     dados["DESCRIÇÃO PRODUTO"] = dados.iloc[:, 3].map(_texto)
-    dados["CÓDIGO PRODUTO"] = dados.iloc[:, 15].map(_codigo)
+    dados["CÓDIGO UNIFICADO"] = dados.iloc[:, 15].map(_codigo)
     dados["DATA DE ENTREGA"] = dados.iloc[:, 11].map(_data)
-    dados["QUANTIDADE OF"] = 1.0
+
+    # Regra de vínculo: P é a primeira tentativa. Se P não existir na BOM,
+    # tenta C. Assim, um código preenchido em P mas não localizado também
+    # pode ser recuperado pelo código da coluna C.
+    conjunto_codigos = set(codigos_h001)
+    dados["CÓDIGO PRODUTO"] = dados["CÓDIGO UNIFICADO"]
+    dados["FONTE CÓDIGO"] = "P"
+
+    usar_c = ~dados["CÓDIGO UNIFICADO"].isin(conjunto_codigos)
+    dados.loc[usar_c & dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos), "CÓDIGO PRODUTO"] = dados.loc[
+        usar_c & dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos), "CÓDIGO ALTERNATIVO"
+    ]
+    dados.loc[usar_c & dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos), "FONTE CÓDIGO"] = "C"
 
     return dados[
         [
             "ORDEM DE PRODUÇÃO",
             "DESCRIÇÃO PRODUTO",
             "CÓDIGO PRODUTO",
+            "CÓDIGO UNIFICADO",
+            "CÓDIGO ALTERNATIVO",
+            "FONTE CÓDIGO",
             "DATA DE ENTREGA",
-            "QUANTIDADE OF",
         ]
     ].copy()
 
@@ -108,9 +123,7 @@ def _preparar_h001(h001):
     dados["CÓDIGO PRODUTO"] = dados.iloc[:, 5].map(_codigo)
     dados["MATERIAL"] = dados.iloc[:, 7].map(_codigo)
     dados["DESCRIÇÃO MATERIAL"] = dados.iloc[:, 8].map(_texto)
-    dados["QUANTIDADE POR OF"] = pd.to_numeric(
-        dados.iloc[:, 11], errors="coerce"
-    ).fillna(0)
+    dados["QUANTIDADE POR OF"] = pd.to_numeric(dados.iloc[:, 11], errors="coerce").fillna(0)
 
     dados = dados[
         (dados["CÓDIGO PRODUTO"] != "")
@@ -118,8 +131,7 @@ def _preparar_h001(h001):
         & (dados["QUANTIDADE POR OF"] != 0)
     ].copy()
 
-    # A lista de material é fixa por produto. Caso exista repetição
-    # do mesmo material no cadastro, consolidamos a quantidade.
+    # A BOM é fixa por produto. Repetições do mesmo material são consolidadas.
     dados = (
         dados.groupby(["CÓDIGO PRODUTO", "MATERIAL"], as_index=False)
         .agg(
@@ -136,126 +148,107 @@ def _preparar_h001(h001):
 
 
 def processar_tc_tp(pmp_bruto, h001_bruto):
-    pmp = _preparar_pmp(pmp_bruto)
+    # Primeiro carregamos a BOM para saber quais códigos podem ser usados
+    # no vínculo principal e no fallback da coluna C.
     bom = _preparar_h001(h001_bruto)
+    codigos_h001 = set(bom["CÓDIGO PRODUTO"].unique())
+    pmp = _preparar_pmp(pmp_bruto, codigos_h001)
 
-    # Cada OF programada representa 1 unidade do produto intermediário.
-    # Para cada OF, expande-se a BOM fixa correspondente.
-    base = pmp.merge(
-        bom,
-        on="CÓDIGO PRODUTO",
-        how="left",
-        indicator=True,
-    )
+    base = pmp.merge(bom, on="CÓDIGO PRODUTO", how="left", indicator=True)
+
+    sem_codigo = pmp[
+        ~pmp["CÓDIGO PRODUTO"].isin(codigos_h001)
+    ][
+        ["ORDEM DE PRODUÇÃO", "DESCRIÇÃO PRODUTO", "CÓDIGO UNIFICADO", "CÓDIGO ALTERNATIVO"]
+    ].drop_duplicates()
 
     sem_bom = base.loc[
         (base["_merge"] == "left_only") | base["MATERIAL"].isna(),
         ["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "DESCRIÇÃO PRODUTO"],
     ].drop_duplicates()
 
-    # OFs sem código unificado não conseguem fazer a junção com H001.
-    sem_codigo = pmp[pmp["CÓDIGO PRODUTO"] == ""][
-        ["ORDEM DE PRODUÇÃO", "DESCRIÇÃO PRODUTO"]
-    ].drop_duplicates()
-
     base = base[base["_merge"] == "both"].copy()
     base.drop(columns=["_merge"], inplace=True)
 
+    # Como cada OF programada representa uma unidade do produto intermediário,
+    # a quantidade da BOM é diretamente a necessidade de componentes daquela OF.
     base["DATA DE NECESSIDADE"] = base["DATA DE ENTREGA"].map(
         lambda x: x - pd.Timedelta(days=30) if pd.notna(x) else pd.NaT
     )
 
     hoje = date.today()
-    semanas = base["DATA DE NECESSIDADE"].map(
-        lambda x: _semana_necessidade(x, hoje)
-    )
-    base["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
-    base["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
+    semanas_entrega = base["DATA DE ENTREGA"].map(lambda x: _semana(x, hoje))
+    base["SEMANA DE ENTREGA"] = semanas_entrega.map(lambda x: x[0])
+    base["PERIODO DA SEMANA DE ENTREGA"] = semanas_entrega.map(lambda x: x[1])
 
-    base["NECESSIDADE"] = (
-        base["QUANTIDADE POR OF"] * base["QUANTIDADE OF"]
-    )
+    semanas_necessidade = base["DATA DE NECESSIDADE"].map(lambda x: _semana(x, hoje))
+    base["SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[0])
+    base["PERIODO DA SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[1])
 
-    mask_semana = base["SEMANA DE NECESSIDADE"].str.match(
-        r"^\d{2}$", na=False
-    )
-    base["NECESSIDADE DA SEMANA"] = 0.0
-    if mask_semana.any():
-        base.loc[mask_semana, "NECESSIDADE DA SEMANA"] = (
-            base.loc[mask_semana]
-            .groupby(["MATERIAL", "SEMANA DE NECESSIDADE"])["NECESSIDADE"]
-            .transform("sum")
+    # Cada OF equivale a 1 unidade prevista de entrega. O total semanal é
+    # calculado por produto intermediário e semana de entrega.
+    mask_entrega = base["SEMANA DE ENTREGA"].str.match(r"^\d{2}$", na=False)
+    base["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = 0.0
+    if mask_entrega.any():
+        base.loc[mask_entrega, "QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = (
+            base.loc[mask_entrega]
+            .drop_duplicates(subset=["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "SEMANA DE ENTREGA"])
+            .groupby(["CÓDIGO PRODUTO", "SEMANA DE ENTREGA"])["ORDEM DE PRODUÇÃO"]
+            .transform("count")
+            .reindex(base.index, fill_value=0)
         )
 
     colunas = [
         "ORDEM DE PRODUÇÃO",
         "CÓDIGO PRODUTO",
         "DESCRIÇÃO PRODUTO",
-        "QUANTIDADE OF",
         "DATA DE ENTREGA",
+        "SEMANA DE ENTREGA",
+        "PERIODO DA SEMANA DE ENTREGA",
+        "QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA",
         "DATA DE NECESSIDADE",
+        "SEMANA DE NECESSIDADE",
+        "PERIODO DA SEMANA DE NECESSIDADE",
         "MATERIAL",
         "DESCRIÇÃO MATERIAL",
         "QUANTIDADE POR OF",
-        "NECESSIDADE",
-        "SEMANA DE NECESSIDADE",
-        "PERIODO DA SEMANA",
-        "NECESSIDADE DA SEMANA",
     ]
     base = base[colunas].sort_values(
-        ["DATA DE NECESSIDADE", "MATERIAL", "ORDEM DE PRODUÇÃO"],
+        ["DATA DE ENTREGA", "MATERIAL", "ORDEM DE PRODUÇÃO"],
         na_position="last",
     ).reset_index(drop=True)
 
     for coluna in ["DATA DE ENTREGA", "DATA DE NECESSIDADE"]:
-        base[coluna] = pd.to_datetime(
-            base[coluna], errors="coerce"
-        ).dt.strftime("%d/%m/%Y").fillna("")
+        base[coluna] = pd.to_datetime(base[coluna], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
 
     avisos = []
     if not sem_codigo.empty:
         avisos.append(
-            f"{len(sem_codigo)} OF(s) programada(s) estão sem CÓDIGO UNIFICADO na coluna P do PMP."
+            f"{len(sem_codigo)} OF(s) programada(s) não conseguiram localizar o código da coluna P nem o código alternativo da coluna C no H001."
+        )
+
+    recuperadas_por_c = pmp[pmp["FONTE CÓDIGO"] == "C"]
+    if not recuperadas_por_c.empty:
+        avisos.append(
+            f"{len(recuperadas_por_c)} OF(s) foram vinculadas pelo código da coluna C porque o código da coluna P não foi localizado no H001."
+        )
+
+    if not sem_bom.empty:
+        avisos.append(
+            f"{len(sem_bom)} OF(s) programada(s) permaneceram sem BOM após as duas tentativas de vínculo."
         )
 
     inconsistencias = []
-    if not sem_codigo.empty:
-        for _, row in sem_codigo.iterrows():
-            inconsistencias.append(
-                {
-                    "TIPO": "SEM CÓDIGO UNIFICADO",
-                    "ORDEM DE PRODUÇÃO": row["ORDEM DE PRODUÇÃO"],
-                    "CÓDIGO PRODUTO": "",
-                    "MENSAGEM": "Coluna P do PMP sem código para junção com H001.",
-                }
-            )
-    if not sem_bom.empty:
-        for _, row in sem_bom.iterrows():
-            if row["CÓDIGO PRODUTO"] != "":
-                inconsistencias.append(
-                    {
-                        "TIPO": "BOM NÃO ENCONTRADA",
-                        "ORDEM DE PRODUÇÃO": row["ORDEM DE PRODUÇÃO"],
-                        "CÓDIGO PRODUTO": row["CÓDIGO PRODUTO"],
-                        "MENSAGEM": "Código do PMP não localizado na coluna F do H001.",
-                    }
-                )
-
-    if not sem_bom.empty:
-        codigos_sem_bom = sorted(
-            set(
-                sem_bom["CÓDIGO PRODUTO"]
-                .astype(str)
-                .str.strip()
-                .replace("", pd.NA)
-                .dropna()
-            )
+    for _, row in sem_codigo.iterrows():
+        inconsistencias.append(
+            {
+                "TIPO": "BOM NÃO ENCONTRADA",
+                "ORDEM DE PRODUÇÃO": row["ORDEM DE PRODUÇÃO"],
+                "CÓDIGO UNIFICADO (P)": row["CÓDIGO UNIFICADO"],
+                "CÓDIGO ALTERNATIVO (C)": row["CÓDIGO ALTERNATIVO"],
+                "MENSAGEM": "Nenhum dos dois códigos foi localizado na coluna F do H001.",
+            }
         )
-        if codigos_sem_bom:
-            avisos.append(
-                f"{len(sem_bom)} OF(s) programada(s) não encontraram BOM no H001. "
-                f"Códigos: {', '.join(codigos_sem_bom)}."
-            )
 
     validacao = pd.DataFrame(inconsistencias)
     if validacao.empty:
@@ -263,7 +256,8 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
             columns=[
                 "TIPO",
                 "ORDEM DE PRODUÇÃO",
-                "CÓDIGO PRODUTO",
+                "CÓDIGO UNIFICADO (P)",
+                "CÓDIGO ALTERNATIVO (C)",
                 "MENSAGEM",
             ]
         )
@@ -277,6 +271,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         "materiais_unicos": base["MATERIAL"].nunique(),
         "of_sem_codigo": len(sem_codigo),
         "of_sem_bom": len(sem_bom),
+        "of_vinculadas_por_c": len(recuperadas_por_c),
         "avisos": len(avisos),
     }
 
