@@ -43,6 +43,37 @@ def ler_for022(arquivo):
 
 
 with st.sidebar:
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] .logo-area-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin: 0 0 0.15rem 0;
+        }
+        section[data-testid="stSidebar"] .stFileUploader {
+            margin-top: 0;
+            margin-bottom: 0.35rem;
+        }
+        section[data-testid="stSidebar"] .stFileUploader section {
+            padding: 0.25rem 0.35rem;
+            min-height: 3.7rem;
+        }
+        </style>
+        <div class="logo-area-title">Logo da empresa</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    logo_empresa = st.file_uploader(
+        "Inserir logo",
+        type=["png", "jpg", "jpeg"],
+        key="logo_empresa",
+        label_visibility="collapsed",
+        help="Selecione a logo da empresa.",
+    )
+    if logo_empresa is not None:
+        st.image(logo_empresa, width=145)
+
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
         "Tipo de relatório",
