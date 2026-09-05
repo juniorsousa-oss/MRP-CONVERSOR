@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 from pathlib import Path
@@ -47,29 +48,31 @@ with st.sidebar:
         """
         <style>
         section[data-testid="stSidebar"] .logo-area-title {
-            display: none;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin: 0 0 0.15rem 0;
         }
-        section[data-testid="stSidebar"] .logo-uploader-empty {
-            margin: 0 0 0.35rem 0;
+        section[data-testid="stSidebar"] .logo-uploader {
+            margin: 0 0 0.25rem 0;
         }
-        section[data-testid="stSidebar"] .logo-uploader-empty .stFileUploader {
+        section[data-testid="stSidebar"] .logo-uploader .stFileUploader {
             margin: 0;
         }
-        section[data-testid="stSidebar"] .logo-uploader-empty .stFileUploader section {
-            padding: 0.55rem 0.45rem;
-            min-height: 5.5rem;
+        section[data-testid="stSidebar"] .logo-uploader .stFileUploader section {
+            padding: 0.35rem 0.4rem;
+            min-height: 4.7rem;
         }
         section[data-testid="stSidebar"] .logo-preview {
+            width: 100%;
+            height: 5.5rem;
             display: flex;
             justify-content: center;
             align-items: center;
-            width: 100%;
-            min-height: 5.5rem;
-            margin: 0 0 0.35rem 0;
-            border: 1px dashed rgba(49, 51, 63, 0.25);
+            border: 1px dashed rgba(49, 51, 63, 0.28);
             border-radius: 0.5rem;
             box-sizing: border-box;
             overflow: hidden;
+            margin: 0 0 0.35rem 0;
         }
         section[data-testid="stSidebar"] .logo-preview img {
             display: block;
@@ -77,35 +80,46 @@ with st.sidebar:
             max-height: 78px;
             width: auto;
             height: auto;
-            margin: auto;
+            object-fit: contain;
         }
-        section[data-testid="stSidebar"] .logo-upload-info {
+        section[data-testid="stSidebar"] .logo-empty-info {
             text-align: center;
-            font-size: 0.72rem;
-            line-height: 1.25;
-            opacity: 0.72;
-            margin-top: 0.1rem;
+            font-size: 0.68rem;
+            line-height: 1.2;
+            opacity: 0.68;
+            margin: 0.05rem 0 0.35rem 0;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    logo_empresa = st.file_uploader(
-        "Inserir logo",
-        type=["png", "jpg", "jpeg"],
-        key="logo_empresa",
-        label_visibility="collapsed",
-        help="Selecione a logo da empresa.",
-    )
+    if "logo_bytes" not in st.session_state:
+        st.session_state["logo_bytes"] = None
+        st.session_state["logo_mime"] = None
 
-    if logo_empresa is not None:
-        st.markdown('<div class="logo-preview">', unsafe_allow_html=True)
-        st.image(logo_empresa, width=145)
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
+    if st.session_state["logo_bytes"] is None:
+        st.markdown('<div class="logo-area-title">Logo da empresa</div>', unsafe_allow_html=True)
+        logo_empresa = st.file_uploader(
+            "Inserir logo",
+            type=["png", "jpg", "jpeg"],
+            key="logo_empresa",
+            label_visibility="collapsed",
+            help="Selecione a logo da empresa.",
+        )
+        if logo_empresa is not None:
+            st.session_state["logo_bytes"] = logo_empresa.getvalue()
+            st.session_state["logo_mime"] = logo_empresa.type or "image/png"
+            st.rerun()
         st.markdown(
-            '<div class="logo-upload-info">Clique para inserir a logo<br>PNG, JPG ou JPEG</div>',
+            '<div class="logo-empty-info">Clique para inserir a logo<br>PNG, JPG ou JPEG</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        encoded_logo = base64.b64encode(st.session_state["logo_bytes"]).decode("ascii")
+        mime = st.session_state["logo_mime"] or "image/png"
+        st.markdown(
+            f'<div class="logo-preview"><img src="data:{mime};base64,{encoded_logo}" alt="Logo da empresa"></div>',
             unsafe_allow_html=True,
         )
 
