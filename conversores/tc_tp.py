@@ -76,7 +76,6 @@ def _preparar_pmp(pmp, codigos_h001):
 
     dados = pmp.copy()
     dados["STATUS"] = dados.iloc[:, 14].map(_texto).str.upper()
-    # Pré-limpeza: somente OFs com STATUS = PROGRAMADO.
     dados = dados[dados["STATUS"] == "PROGRAMADO"].copy()
 
     dados["ORDEM DE PRODUÇÃO"] = dados.iloc[:, 0].map(_texto)
@@ -85,18 +84,17 @@ def _preparar_pmp(pmp, codigos_h001):
     dados["CÓDIGO UNIFICADO"] = dados.iloc[:, 15].map(_codigo)
     dados["DATA DE ENTREGA"] = dados.iloc[:, 11].map(_data)
 
-    # Regra de vínculo: P é a primeira tentativa. Se P não existir na BOM,
-    # tenta C. Assim, um código preenchido em P mas não localizado também
-    # pode ser recuperado pelo código da coluna C.
+    # P é a primeira tentativa. Se P não existir no H001, tenta C.
     conjunto_codigos = set(codigos_h001)
     dados["CÓDIGO PRODUTO"] = dados["CÓDIGO UNIFICADO"]
     dados["FONTE CÓDIGO"] = "P"
 
-    usar_c = ~dados["CÓDIGO UNIFICADO"].isin(conjunto_codigos)
-    dados.loc[usar_c & dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos), "CÓDIGO PRODUTO"] = dados.loc[
-        usar_c & dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos), "CÓDIGO ALTERNATIVO"
+    mascara_fallback = ~dados["CÓDIGO UNIFICADO"].isin(conjunto_codigos)
+    mascara_c_valido = dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos)
+    dados.loc[mascara_fallback & mascara_c_valido, "CÓDIGO PRODUTO"] = dados.loc[
+        mascara_fallback & mascara_c_valido, "CÓDIGO ALTERNATIVO"
     ]
-    dados.loc[usar_c & dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos), "FONTE CÓDIGO"] = "C"
+    dados.loc[mascara_fallback & mascara_c_valido, "FONTE CÓDIGO"] = "C"
 
     return dados[
         [
@@ -131,7 +129,6 @@ def _preparar_h001(h001):
         & (dados["QUANTIDADE POR OF"] != 0)
     ].copy()
 
-    # A BOM é fixa por produto. Repetições do mesmo material são consolidadas.
     dados = (
         dados.groupby(["CÓDIGO PRODUTO", "MATERIAL"], as_index=False)
         .agg(
@@ -148,8 +145,6 @@ def _preparar_h001(h001):
 
 
 def processar_tc_tp(pmp_bruto, h001_bruto):
-    # Primeiro carregamos a BOM para saber quais códigos podem ser usados
-    # no vínculo principal e no fallback da coluna C.
     bom = _preparar_h001(h001_bruto)
     codigos_h001 = set(bom["CÓDIGO PRODUTO"].unique())
     pmp = _preparar_pmp(pmp_bruto, codigos_h001)
@@ -170,8 +165,8 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     base = base[base["_merge"] == "both"].copy()
     base.drop(columns=["_merge"], inplace=True)
 
-    # Como cada OF programada representa uma unidade do produto intermediário,
-    # a quantidade da BOM é diretamente a necessidade de componentes daquela OF.
+    # Cada OF programada representa 1 unidade do produto intermediário.
+    # A quantidade da BOM é, portanto, a necessidade do componente por OF.
     base["DATA DE NECESSIDADE"] = base["DATA DE ENTREGA"].map(
         lambda x: x - pd.Timedelta(days=30) if pd.notna(x) else pd.NaT
     )
@@ -185,18 +180,31 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     base["SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[0])
     base["PERIODO DA SEMANA DE NECESSIDADE"] = semanas_necessidade.map(lambda x: x[1])
 
-    # Cada OF equivale a 1 unidade prevista de entrega. O total semanal é
-    # calculado por produto intermediário e semana de entrega.
-    mask_entrega = base["SEMANA DE ENTREGA"].str.match(r"^\d{2}$", na=False)
+    # A quantidade total prevista de entrega é a quantidade de OFs do produto
+    # naquela semana. O cálculo é feito antes da expansão da BOM, para não
+    # contar uma mesma OF várias vezes (uma vez por material).
     base["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = 0.0
-    if mask_entrega.any():
-        base.loc[mask_entrega, "QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = (
-            base.loc[mask_entrega]
-            .drop_duplicates(subset=["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "SEMANA DE ENTREGA"])
-            .groupby(["CÓDIGO PRODUTO", "SEMANA DE ENTREGA"])["ORDEM DE PRODUÇÃO"]
-            .transform("count")
-            .reindex(base.index, fill_value=0)
+    entrega_unica = base.loc[
+        mask_entrega := base["SEMANA DE ENTREGA"].str.match(r"^\d{2}$", na=False),
+        ["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "SEMANA DE ENTREGA"],
+    ].drop_duplicates()
+
+    if not entrega_unica.empty:
+        totais_entrega = (
+            entrega_unica.groupby(["CÓDIGO PRODUTO", "SEMANA DE ENTREGA"])
+            .size()
+            .rename("QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA")
+            .reset_index()
         )
+        base = base.drop(columns=["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"])
+        base = base.merge(
+            totais_entrega,
+            on=["CÓDIGO PRODUTO", "SEMANA DE ENTREGA"],
+            how="left",
+        )
+        base["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = base[
+            "QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"
+        ].fillna(0)
 
     colunas = [
         "ORDEM DE PRODUÇÃO",
