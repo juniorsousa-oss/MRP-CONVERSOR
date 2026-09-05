@@ -16,6 +16,7 @@ st.title("MRP-CONVERSOR")
 st.caption("Conversão e validação de relatórios brutos do ERP para Excel tratado.")
 
 CONFIG_ENDERECOS = Path(__file__).parent / "config" / "enderecos_nao_disponiveis.json"
+CONFIG_LOGO = Path(__file__).parent / "config" / "logo_setta.svg"
 
 
 def carregar_enderecos_nao_disponiveis():
@@ -25,6 +26,20 @@ def carregar_enderecos_nao_disponiveis():
         return [str(x).strip() for x in dados.get("enderecos_nao_disponiveis", []) if str(x).strip()]
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
+
+
+def carregar_logo_padrao():
+    try:
+        return CONFIG_LOGO.read_bytes(), "image/svg+xml"
+    except OSError:
+        return None, None
+
+
+@st.cache_resource
+
+def armazenamento_logo():
+    logo_bytes, logo_mime = carregar_logo_padrao()
+    return {"bytes": logo_bytes, "mime": logo_mime}
 
 
 def ler_estoque_como_cabecalho(arquivo):
@@ -94,11 +109,9 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    if "logo_bytes" not in st.session_state:
-        st.session_state["logo_bytes"] = None
-        st.session_state["logo_mime"] = None
+    logo_store = armazenamento_logo()
 
-    if st.session_state["logo_bytes"] is None:
+    if logo_store["bytes"] is None:
         st.markdown('<div class="logo-area-title">Logo da empresa</div>', unsafe_allow_html=True)
         logo_empresa = st.file_uploader(
             "Inserir logo",
@@ -108,16 +121,16 @@ with st.sidebar:
             help="Selecione a logo da empresa.",
         )
         if logo_empresa is not None:
-            st.session_state["logo_bytes"] = logo_empresa.getvalue()
-            st.session_state["logo_mime"] = logo_empresa.type or "image/png"
+            logo_store["bytes"] = logo_empresa.getvalue()
+            logo_store["mime"] = logo_empresa.type or "image/png"
             st.rerun()
         st.markdown(
             '<div class="logo-empty-info">Clique para inserir a logo<br>PNG, JPG ou JPEG</div>',
             unsafe_allow_html=True,
         )
     else:
-        encoded_logo = base64.b64encode(st.session_state["logo_bytes"]).decode("ascii")
-        mime = st.session_state["logo_mime"] or "image/png"
+        encoded_logo = base64.b64encode(logo_store["bytes"]).decode("ascii")
+        mime = logo_store["mime"] or "image/png"
         st.markdown(
             f'<div class="logo-preview"><img src="data:{mime};base64,{encoded_logo}" alt="Logo da empresa"></div>',
             unsafe_allow_html=True,
