@@ -47,23 +47,50 @@ with st.sidebar:
         """
         <style>
         section[data-testid="stSidebar"] .logo-area-title {
-            font-size: 0.78rem;
-            font-weight: 600;
-            margin: 0 0 0.15rem 0;
+            display: none;
         }
-        section[data-testid="stSidebar"] .stFileUploader {
-            margin-top: 0;
-            margin-bottom: 0.35rem;
+        section[data-testid="stSidebar"] .logo-uploader-empty {
+            margin: 0 0 0.35rem 0;
         }
-        section[data-testid="stSidebar"] .stFileUploader section {
-            padding: 0.25rem 0.35rem;
-            min-height: 3.7rem;
+        section[data-testid="stSidebar"] .logo-uploader-empty .stFileUploader {
+            margin: 0;
+        }
+        section[data-testid="stSidebar"] .logo-uploader-empty .stFileUploader section {
+            padding: 0.55rem 0.45rem;
+            min-height: 5.5rem;
+        }
+        section[data-testid="stSidebar"] .logo-preview {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            min-height: 5.5rem;
+            margin: 0 0 0.35rem 0;
+            border: 1px dashed rgba(49, 51, 63, 0.25);
+            border-radius: 0.5rem;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        section[data-testid="stSidebar"] .logo-preview img {
+            display: block;
+            max-width: 145px;
+            max-height: 78px;
+            width: auto;
+            height: auto;
+            margin: auto;
+        }
+        section[data-testid="stSidebar"] .logo-upload-info {
+            text-align: center;
+            font-size: 0.72rem;
+            line-height: 1.25;
+            opacity: 0.72;
+            margin-top: 0.1rem;
         }
         </style>
-        <div class="logo-area-title">Logo da empresa</div>
         """,
         unsafe_allow_html=True,
     )
+
     logo_empresa = st.file_uploader(
         "Inserir logo",
         type=["png", "jpg", "jpeg"],
@@ -71,8 +98,16 @@ with st.sidebar:
         label_visibility="collapsed",
         help="Selecione a logo da empresa.",
     )
+
     if logo_empresa is not None:
+        st.markdown('<div class="logo-preview">', unsafe_allow_html=True)
         st.image(logo_empresa, width=145)
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div class="logo-upload-info">Clique para inserir a logo<br>PNG, JPG ou JPEG</div>',
+            unsafe_allow_html=True,
+        )
 
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
