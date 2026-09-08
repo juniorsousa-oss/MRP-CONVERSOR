@@ -36,26 +36,41 @@ def carregar_logo_padrao():
 
 
 @st.cache_resource
-
 def armazenamento_logo():
     logo_bytes, logo_mime = carregar_logo_padrao()
     return {"bytes": logo_bytes, "mime": logo_mime}
 
 
+def ler_excel_seguro(arquivo, **kwargs):
+    """Lê Excel normalmente e usa Calamine quando o openpyxl encontra
+    formatação/condicional inválida no arquivo de origem.
+    """
+    try:
+        return pd.read_excel(arquivo, **kwargs)
+    except TypeError as exc:
+        if "MultiCellRange" not in str(exc):
+            raise
+        try:
+            arquivo.seek(0)
+        except (AttributeError, OSError):
+            pass
+        return pd.read_excel(arquivo, engine="calamine", **kwargs)
+
+
 def ler_estoque_como_cabecalho(arquivo):
-    return pd.read_excel(arquivo, header=1)
+    return ler_excel_seguro(arquivo, header=1)
 
 
 def ler_compras_como_cabecalho(arquivo, sheet_name=0):
-    return pd.read_excel(arquivo, sheet_name=sheet_name, header=1)
+    return ler_excel_seguro(arquivo, sheet_name=sheet_name, header=1)
 
 
 def ler_for001(arquivo):
-    return pd.read_excel(arquivo, sheet_name="PAINEL", header=4)
+    return ler_excel_seguro(arquivo, sheet_name="PAINEL", header=4)
 
 
 def ler_for022(arquivo):
-    return pd.read_excel(arquivo, sheet_name="Datas esperadas", header=0)
+    return ler_excel_seguro(arquivo, sheet_name="Datas esperadas", header=0)
 
 
 with st.sidebar:
@@ -85,6 +100,7 @@ with st.sidebar:
             align-items: center;
             border: 1px dashed rgba(49, 51, 63, 0.28);
             border-radius: 0.5rem;
+            background: #fff;
             box-sizing: border-box;
             overflow: hidden;
             margin: 0 0 0.35rem 0;
@@ -158,7 +174,7 @@ if tipo_relatorio == "Relatório Geral":
 
     if arquivo is not None and for001_arquivo is not None and for022_arquivo is not None:
         try:
-            bruto = pd.read_excel(arquivo, sheet_name="Geral")
+            bruto = ler_excel_seguro(arquivo, sheet_name="Geral")
             for001_bruto = ler_for001(for001_arquivo)
             for022_bruto = ler_for022(for022_arquivo)
         except ValueError as exc:
@@ -345,8 +361,8 @@ else:
 
     if pmp_arquivo is not None and h001_arquivo is not None:
         try:
-            pmp_bruto = pd.read_excel(pmp_arquivo)
-            h001_bruto = pd.read_excel(h001_arquivo)
+            pmp_bruto = ler_excel_seguro(pmp_arquivo)
+            h001_bruto = ler_excel_seguro(h001_arquivo)
         except Exception as exc:
             st.error(f"Não foi possível ler os relatórios de TC/TP: {exc}")
             st.stop()
