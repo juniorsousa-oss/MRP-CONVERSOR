@@ -163,14 +163,14 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
 
 
 def _mapa_for022(for022: pd.DataFrame, avisos: list[str]):
-    # FOR-022: A = OP e AJ = SEPARAÇÃO.
-    # AJ é a 36ª coluna, índice 35.
-    if for022.shape[1] < 36:
-        return None, ["FOR-022: são necessárias pelo menos 36 colunas para acessar A e AJ."]
+    # FOR-022: A = OP e V = SEPARAÇÃO.
+    # V é a 22ª coluna, índice 21.
+    if for022.shape[1] < 22:
+        return None, ["FOR-022: são necessárias pelo menos 22 colunas para acessar A e V."]
 
     base = for022.copy()
     base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
-    base["_SEPARACAO"] = pd.to_datetime(base.iloc[:, 35], errors="coerce", dayfirst=True)
+    base["_SEPARACAO"] = pd.to_datetime(base.iloc[:, 21], errors="coerce", dayfirst=True)
     base = base[base["_OP"] != ""].copy()
 
     registros = {}
