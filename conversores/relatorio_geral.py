@@ -304,14 +304,15 @@ def processar_relatorio_geral(
     agrupado["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
     agrupado["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
 
-    # Somente demandas NORMAL entram no total semanal.
+    # A necessidade semanal é formada pela PENDÊNCIA, e não pela quantidade necessária.
+    # Somente linhas com semana numérica participam do total.
     agrupado["_DEMANDA_VALIDADA"] = agrupado["_CONDICAO_PCP"].eq("NORMAL")
     agrupado["NECESSIDADE DA SEMANA"] = 0.0
     mask_normal = agrupado["_DEMANDA_VALIDADA"] & agrupado["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
     if mask_normal.any():
         agrupado.loc[mask_normal, "NECESSIDADE DA SEMANA"] = (
             agrupado.loc[mask_normal]
-            .groupby(["Código", "SEMANA DE NECESSIDADE"])["Qtd. necessária"]
+            .groupby(["Código", "SEMANA DE NECESSIDADE"])["Pendência"]
             .transform("sum")
         )
 
