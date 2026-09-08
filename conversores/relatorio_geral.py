@@ -104,31 +104,24 @@ def _domingo_da_semana(data_referencia: date) -> date | None:
 def _semana_operacional(valor: Any, hoje: date) -> tuple[str, str]:
     if pd.isna(valor):
         return "", ""
-
     data_original = pd.Timestamp(valor).date()
     primeiro_domingo = date(data_original.year, 1, 1)
     while primeiro_domingo.weekday() != 6:
         primeiro_domingo += timedelta(days=1)
     if data_original < primeiro_domingo:
         return "", ""
-
     data_calculo = hoje if data_original < hoje else data_original
     domingo = _domingo_da_semana(data_calculo)
     if domingo is None:
         return "", ""
-
     semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
     sabado = domingo + timedelta(days=6)
     return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
 
 
 def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
-    # FOR-001: A = ORDEM DE PRODUÇÃO, M = DT MRP, N = CONDIÇÃO.
-    # O vínculo é feito pela posição das colunas, conforme definição do relatório,
-    # e não pelo texto do cabeçalho, evitando quebra por variação de nomenclatura.
     if for001.shape[1] < 14:
         return None, ["FOR-001: são necessárias pelo menos 14 colunas para acessar A, M e N."]
-
     base = for001.copy()
     base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
     base["_DT_MRP"] = pd.to_datetime(base.iloc[:, 12], errors="coerce", dayfirst=True)
@@ -145,12 +138,10 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
         if atual is None:
             registros[op] = {"data_mrp": dt_mrp, "condicao": cond}
             continue
-
         if not pd.isna(dt_mrp) and (pd.isna(atual["data_mrp"]) or dt_mrp != atual["data_mrp"]):
             if not pd.isna(atual["data_mrp"]):
                 conflitos += 1
             atual["data_mrp"] = dt_mrp
-
         if cond and cond != "-" and cond != atual["condicao"]:
             if atual["condicao"] and atual["condicao"] != "-":
                 conflitos += 1
@@ -163,11 +154,8 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
 
 
 def _mapa_for022(for022: pd.DataFrame, avisos: list[str]):
-    # FOR-022: A = OP e V = SEPARAÇÃO.
-    # V é a 22ª coluna, índice 21.
     if for022.shape[1] < 22:
         return None, ["FOR-022: são necessárias pelo menos 22 colunas para acessar A e V."]
-
     base = for022.copy()
     base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
     base["_SEPARACAO"] = pd.to_datetime(base.iloc[:, 21], errors="coerce", dayfirst=True)
@@ -273,8 +261,6 @@ def processar_relatorio_geral(
     agrupado["Pendência"] = agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
     agrupado["_OP"] = agrupado["Projeto"].map(_normalizar_op)
 
-    # DATA MRP = DT MRP do FOR-001 menos 30 dias.
-    # A semana de necessidade é calculada sobre essa nova data.
     agrupado["DATA MRP"] = agrupado["_OP"].map(
         lambda op: (
             mapa001.get(op, {}).get("data_mrp", pd.NaT) - pd.Timedelta(days=30)
@@ -304,15 +290,20 @@ def processar_relatorio_geral(
     agrupado["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
     agrupado["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
 
-    # A necessidade semanal é formada pela PENDÊNCIA, e não pela quantidade necessária.
-    # Somente linhas com semana numérica participam do total.
-    agrupado["_DEMANDA_VALIDADA"] = agrupado["_CONDICAO_PCP"].eq("NORMAL")
+    # Regra definitiva: a quantidade considerada para a demanda semanal é a PENDÊNCIA.
+    # Se a semana não for numérica, a pendência considerada para o MRP é ZERO.
+    # Portanto SUSPENSO, FINALIZADO, CANCELADO e SEM INFORMAÇÃO nunca entram no total.
+    agrupado["_PENDENCIA_CONSIDERADA"] = 0.0
+    mask_semana_numerica = agrupado["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
+    agrupado.loc[mask_semana_numerica, "_PENDENCIA_CONSIDERADA"] = agrupado.loc[
+        mask_semana_numerica, "Pendência"
+    ]
+
     agrupado["NECESSIDADE DA SEMANA"] = 0.0
-    mask_normal = agrupado["_DEMANDA_VALIDADA"] & agrupado["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
-    if mask_normal.any():
-        agrupado.loc[mask_normal, "NECESSIDADE DA SEMANA"] = (
-            agrupado.loc[mask_normal]
-            .groupby(["Código", "SEMANA DE NECESSIDADE"])["Pendência"]
+    if mask_semana_numerica.any():
+        agrupado.loc[mask_semana_numerica, "NECESSIDADE DA SEMANA"] = (
+            agrupado.loc[mask_semana_numerica]
+            .groupby(["Código", "SEMANA DE NECESSIDADE"])["_PENDENCIA_CONSIDERADA"]
             .transform("sum")
         )
 
