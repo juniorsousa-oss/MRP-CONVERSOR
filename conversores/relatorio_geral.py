@@ -279,6 +279,43 @@ def _mapa_for022(for022: pd.DataFrame, avisos: list[str]):
     return registros, []
 
 
+def _chave_fallback_op(op: Any) -> str:
+    texto = _normalizar_op(op)
+    if len(texto) != 11 or not texto.isdigit():
+        return ""
+    # Quando os sistemas divergem apenas no bloco intermediário da OP,
+    # usamos PSY (6 primeiros dígitos) + sequencial final (3 últimos) como chave auxiliar.
+    return texto[:6] + texto[-3:]
+
+
+def _resolver_fallbacks_pcp(ops: list[str], mapa001: dict, mapa022: dict) -> dict[str, str]:
+    indice001: dict[str, list[str]] = {}
+    indice022: dict[str, list[str]] = {}
+
+    for candidato in mapa001.keys():
+        chave = _chave_fallback_op(candidato)
+        if chave:
+            indice001.setdefault(chave, []).append(candidato)
+
+    for candidato in mapa022.keys():
+        chave = _chave_fallback_op(candidato)
+        if chave:
+            indice022.setdefault(chave, []).append(candidato)
+
+    fallbacks: dict[str, str] = {}
+    for op in ops:
+        if not op or (op in mapa001 and op in mapa022):
+            continue
+        chave = _chave_fallback_op(op)
+        if not chave:
+            continue
+        candidatos_comuns = sorted(set(indice001.get(chave, [])) & set(indice022.get(chave, [])))
+        if len(candidatos_comuns) == 1:
+            fallbacks[op] = candidatos_comuns[0]
+
+    return fallbacks
+
+
 def processar_relatorio_geral(
     bruto: pd.DataFrame,
     for001: pd.DataFrame | None = None,
@@ -363,17 +400,27 @@ def processar_relatorio_geral(
     agrupado["Pendência"] = agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
     agrupado["_OP"] = agrupado["Projeto"].map(_normalizar_op)
 
-    agrupado["DATA MRP"] = agrupado["_OP"].map(
+    ops_unicas = [op for op in agrupado["_OP"].dropna().unique().tolist() if op]
+    fallbacks = _resolver_fallbacks_pcp(ops_unicas, mapa001, mapa022)
+    agrupado["_OP_PCP"] = agrupado["_OP"].map(lambda op: fallbacks.get(op, op))
+
+    for op_origem, op_pcp in sorted(fallbacks.items()):
+        avisos.append(
+            f"Vínculo auxiliar de OP: {op_origem} não foi encontrada exatamente nos dois PCPs; "
+            f"foi vinculada a {op_pcp} por PSY + sequencial final, com correspondência única em FOR-001 e FOR-022."
+        )
+
+    agrupado["DATA MRP"] = agrupado["_OP_PCP"].map(
         lambda op: (
             mapa001.get(op, {}).get("data_mrp", pd.NaT) - pd.Timedelta(days=30)
             if op and not pd.isna(mapa001.get(op, {}).get("data_mrp", pd.NaT))
             else pd.NaT
         )
     )
-    agrupado["_CONDICAO_PCP"] = agrupado["_OP"].map(
+    agrupado["_CONDICAO_PCP"] = agrupado["_OP_PCP"].map(
         lambda op: mapa001.get(op, {}).get("condicao", "") if op else ""
     )
-    agrupado["DATA CM"] = agrupado["_OP"].map(
+    agrupado["DATA CM"] = agrupado["_OP_PCP"].map(
         lambda op: mapa022.get(op, pd.NaT) if op else pd.NaT
     )
 
@@ -409,11 +456,11 @@ def processar_relatorio_geral(
             .transform("sum")
         )
 
-    sem_op = agrupado["_OP"].eq("") | ~agrupado["_OP"].isin(mapa001.keys())
+    sem_op = agrupado["_OP_PCP"].eq("") | ~agrupado["_OP_PCP"].isin(mapa001.keys())
     if sem_op.any():
         avisos.append(f"{int(sem_op.sum())} linha(s) do Relatório Geral não tiveram a OP identificada no FOR-001.")
 
-    sem_cm = agrupado["_OP"].eq("") | ~agrupado["_OP"].isin(mapa022.keys())
+    sem_cm = agrupado["_OP_PCP"].eq("") | ~agrupado["_OP_PCP"].isin(mapa022.keys())
     if sem_cm.any():
         avisos.append(f"{int(sem_cm.sum())} linha(s) não tiveram a OP identificada no FOR-022; DATA CM = NI.")
 
