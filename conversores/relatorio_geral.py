@@ -146,7 +146,7 @@ def _indice_coluna_por_cabecalho(df: pd.DataFrame, termos: list[str]) -> int | N
         if any(cab == termo for termo in termos_norm):
             return i
     for i, cab in enumerate(cabecalhos):
-        if any(termo in cab for termo in termos_norm):
+        if any(len(termo) >= 4 and termo in cab for termo in termos_norm):
             return i
     return None
 
@@ -192,7 +192,10 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
 
     base = for001.copy()
 
-    idx_op = _indice_coluna_por_cabecalho(base, ["ORDEM DE PRODUÇÃO", "ORDEM DE PRODUCAO", "OP"])
+    idx_op = _indice_coluna_por_cabecalho(
+        base,
+        ["ORDEM PRODUÇÃO", "ORDEM PRODUCAO", "ORDEM DE PRODUÇÃO", "ORDEM DE PRODUCAO", "OP"],
+    )
     if idx_op is None:
         idx_op = 0
 
