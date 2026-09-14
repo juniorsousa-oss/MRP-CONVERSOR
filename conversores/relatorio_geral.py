@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import date, timedelta
 from typing import Any
 
@@ -42,6 +43,25 @@ def _texto(valor: Any) -> str:
     if pd.isna(valor):
         return ""
     return str(valor).strip()
+
+
+def _normalizar_cabecalho(valor: Any) -> str:
+    texto = _texto(valor).upper()
+    texto = "".join(
+        ch for ch in unicodedata.normalize("NFD", texto)
+        if unicodedata.category(ch) != "Mn"
+    )
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto
+
+
+def _letra_coluna(indice_zero: int) -> str:
+    numero = indice_zero + 1
+    letras = ""
+    while numero:
+        numero, resto = divmod(numero - 1, 26)
+        letras = chr(65 + resto) + letras
+    return letras
 
 
 def _normalizar_codigo(valor: Any, tamanho: int, nome: str, erros: list[str], linha: int) -> str:
@@ -119,14 +139,93 @@ def _semana_operacional(valor: Any, hoje: date) -> tuple[str, str]:
     return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
 
 
+def _indice_coluna_por_cabecalho(df: pd.DataFrame, termos: list[str]) -> int | None:
+    cabecalhos = [_normalizar_cabecalho(c) for c in df.columns]
+    termos_norm = [_normalizar_cabecalho(t) for t in termos]
+    for i, cab in enumerate(cabecalhos):
+        if any(cab == termo for termo in termos_norm):
+            return i
+    for i, cab in enumerate(cabecalhos):
+        if any(termo in cab for termo in termos_norm):
+            return i
+    return None
+
+
+def _parece_condicao(valor: Any) -> bool:
+    texto = _normalizar_cabecalho(valor)
+    if not texto or texto == "-":
+        return False
+    padroes = (
+        "NORMAL",
+        "SUSPENS",
+        "FINALIZ",
+        "CANCEL",
+        "ENCERR",
+        "BLOQUE",
+        "PARALIS",
+    )
+    return any(p in texto for p in padroes)
+
+
+def _detectar_coluna_condicao(base: pd.DataFrame) -> int | None:
+    indice = _indice_coluna_por_cabecalho(base, ["CONDIÇÃO", "CONDICAO"])
+    if indice is not None:
+        serie = base.iloc[:, indice].map(_texto)
+        if serie.ne("").any():
+            return indice
+
+    melhor_indice = None
+    melhor_pontuacao = 0
+    for i in range(base.shape[1]):
+        serie = base.iloc[:, i].map(_texto)
+        pontuacao = int(serie.map(_parece_condicao).sum())
+        if pontuacao > melhor_pontuacao:
+            melhor_indice = i
+            melhor_pontuacao = pontuacao
+
+    return melhor_indice if melhor_pontuacao > 0 else indice
+
+
 def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
-    if for001.shape[1] < 14:
-        return None, ["FOR-001: são necessárias pelo menos 14 colunas para acessar A, M e N."]
+    if for001.shape[1] < 13:
+        return None, ["FOR-001: não há colunas suficientes para localizar OP e DATA MRP."]
+
     base = for001.copy()
-    base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
-    base["_DT_MRP"] = pd.to_datetime(base.iloc[:, 12], errors="coerce", dayfirst=True)
-    base["_CONDICAO"] = base.iloc[:, 13].map(_texto).str.upper()
+
+    idx_op = _indice_coluna_por_cabecalho(base, ["ORDEM DE PRODUÇÃO", "ORDEM DE PRODUCAO", "OP"])
+    if idx_op is None:
+        idx_op = 0
+
+    idx_mrp = _indice_coluna_por_cabecalho(base, ["DT MRP", "DATA MRP"])
+    if idx_mrp is None:
+        idx_mrp = 12 if base.shape[1] > 12 else None
+
+    idx_cond = _detectar_coluna_condicao(base)
+    if idx_cond is None and base.shape[1] > 13:
+        idx_cond = 13
+
+    if idx_mrp is None:
+        return None, ["FOR-001: não foi possível localizar a coluna DT MRP."]
+    if idx_cond is None:
+        return None, ["FOR-001: não foi possível localizar a coluna CONDIÇÃO."]
+
+    avisos.append(
+        f"FOR-001: OP lida da coluna {_letra_coluna(idx_op)}, "
+        f"DT MRP da coluna {_letra_coluna(idx_mrp)} e CONDIÇÃO da coluna {_letra_coluna(idx_cond)}."
+    )
+
+    base["_OP"] = base.iloc[:, idx_op].map(_normalizar_op)
+    base["_DT_MRP"] = pd.to_datetime(base.iloc[:, idx_mrp], errors="coerce", dayfirst=True)
+    base["_CONDICAO"] = base.iloc[:, idx_cond].map(_texto).str.upper()
     base = base[base["_OP"] != ""].copy()
+
+    com_data = int(base["_DT_MRP"].notna().sum())
+    com_condicao = int(base["_CONDICAO"].map(_parece_condicao).sum())
+    if com_data and not com_condicao:
+        return None, [
+            "FOR-001: a DATA MRP foi localizada, mas nenhuma CONDIÇÃO válida foi encontrada. "
+            "O processamento foi interrompido para evitar gerar semanas incorretas."
+        ]
 
     registros = {}
     conflitos = 0
