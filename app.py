@@ -12,13 +12,15 @@ from conversores.compras import processar_compras
 from conversores.tc_tp import processar_tc_tp
 
 FAVICON = Path(__file__).parent / "favicon.png.png"
-
-st.set_page_config(page_title="CONVERSOR | SETTA ", page_icon=str(FAVICON), layout="wide")
-st.title("MRP-CONVERSOR")
-st.caption("Conversão e validação de relatórios brutos do ERP para Excel tratado.")
-
 CONFIG_ENDERECOS = Path(__file__).parent / "config" / "enderecos_nao_disponiveis.json"
 CONFIG_LOGO = Path(__file__).parent / "config" / "logo_setta.svg"
+
+st.set_page_config(
+    page_title="CONVERSOR MRP | SETTA",
+    page_icon=str(FAVICON),
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
 
 def carregar_enderecos_nao_disponiveis():
@@ -35,12 +37,6 @@ def carregar_logo_padrao():
         return CONFIG_LOGO.read_bytes(), "image/svg+xml"
     except OSError:
         return None, None
-
-
-@st.cache_resource
-def armazenamento_logo():
-    logo_bytes, logo_mime = carregar_logo_padrao()
-    return {"bytes": logo_bytes, "mime": logo_mime}
 
 
 def ler_excel_seguro(arquivo, **kwargs):
@@ -75,85 +71,134 @@ def ler_for022(arquivo):
     return ler_excel_seguro(arquivo, sheet_name="Datas esperadas", header=0)
 
 
+st.markdown(
+    """
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background: #f4f7fb;
+    }
+
+    [data-testid="stHeader"] {
+        background: rgba(255, 255, 255, 0.96);
+    }
+
+    .block-container {
+        max-width: 1780px;
+        padding-top: 3.2rem;
+        padding-left: 2.7rem;
+        padding-right: 2.7rem;
+        padding-bottom: 3rem;
+    }
+
+    .setta-logo-card {
+        width: 100%;
+        min-height: 128px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        border: 1px solid #e5e8ee;
+        border-radius: 16px;
+        box-shadow: 0 4px 14px rgba(24, 39, 75, 0.08);
+        box-sizing: border-box;
+        margin: 0 0 2.55rem 0;
+        padding: 1.1rem 2rem;
+    }
+
+    .setta-logo-card img {
+        display: block;
+        width: auto;
+        height: auto;
+        max-width: 205px;
+        max-height: 86px;
+        object-fit: contain;
+    }
+
+    .app-title {
+        margin: 0;
+        padding: 0;
+        font-size: 2.55rem;
+        line-height: 1.08;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        color: #050505;
+    }
+
+    .app-subtitle {
+        margin-top: 0.72rem;
+        margin-bottom: 0;
+        font-size: 0.94rem;
+        color: #4f5661;
+    }
+
+    .app-info {
+        margin: 1.05rem 0 1.65rem 0;
+        padding: 1rem 1.05rem;
+        background: #dce8f9;
+        color: #1457b6;
+        border-radius: 9px;
+        font-size: 0.98rem;
+        line-height: 1.35;
+    }
+
+    section[data-testid="stSidebar"] {
+        background: #ffffff;
+        border-right: 1px solid #e8ebf0;
+    }
+
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 1.6rem;
+    }
+
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #111111;
+    }
+
+    div[data-testid="stFileUploader"] section {
+        border-radius: 10px;
+    }
+
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e7eaf0;
+        border-radius: 12px;
+        padding: 0.8rem 1rem;
+    }
+
+    div.stButton > button[kind="primary"],
+    div.stDownloadButton > button {
+        border-radius: 9px;
+        font-weight: 600;
+    }
+
+    @media (max-width: 900px) {
+        .block-container {
+            padding-top: 2rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        .setta-logo-card {
+            min-height: 105px;
+            margin-bottom: 1.8rem;
+        }
+        .setta-logo-card img {
+            max-width: 170px;
+            max-height: 72px;
+        }
+        .app-title {
+            font-size: 2rem;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+logo_bytes, logo_mime = carregar_logo_padrao()
+
 with st.sidebar:
-    st.markdown(
-        """
-        <style>
-        section[data-testid="stSidebar"] .logo-area-title {
-            font-size: 0.78rem;
-            font-weight: 600;
-            margin: 0 0 0.15rem 0;
-        }
-        section[data-testid="stSidebar"] .logo-uploader {
-            margin: 0 0 0.25rem 0;
-        }
-        section[data-testid="stSidebar"] .logo-uploader .stFileUploader {
-            margin: 0;
-        }
-        section[data-testid="stSidebar"] .logo-uploader .stFileUploader section {
-            padding: 0.35rem 0.4rem;
-            min-height: 4.7rem;
-        }
-        section[data-testid="stSidebar"] .logo-preview {
-            width: 100%;
-            height: 5.5rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 1px dashed rgba(49, 51, 63, 0.28);
-            border-radius: 0.5rem;
-            background: #fff;
-            box-sizing: border-box;
-            overflow: hidden;
-            margin: 0 0 0.35rem 0;
-        }
-        section[data-testid="stSidebar"] .logo-preview img {
-            display: block;
-            max-width: 145px;
-            max-height: 78px;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-        }
-        section[data-testid="stSidebar"] .logo-empty-info {
-            text-align: center;
-            font-size: 0.68rem;
-            line-height: 1.2;
-            opacity: 0.68;
-            margin: 0.05rem 0 0.35rem 0;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    logo_store = armazenamento_logo()
-
-    if logo_store["bytes"] is None:
-        st.markdown('<div class="logo-area-title">Logo da empresa</div>', unsafe_allow_html=True)
-        logo_empresa = st.file_uploader(
-            "Inserir logo",
-            type=["png", "jpg", "jpeg"],
-            key="logo_empresa",
-            label_visibility="collapsed",
-            help="Selecione a logo da empresa.",
-        )
-        if logo_empresa is not None:
-            logo_store["bytes"] = logo_empresa.getvalue()
-            logo_store["mime"] = logo_empresa.type or "image/png"
-            st.rerun()
-        st.markdown(
-            '<div class="logo-empty-info">Clique para inserir a logo<br>PNG, JPG ou JPEG</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        encoded_logo = base64.b64encode(logo_store["bytes"]).decode("ascii")
-        mime = logo_store["mime"] or "image/png"
-        st.markdown(
-            f'<div class="logo-preview"><img src="data:{mime};base64,{encoded_logo}" alt="Logo da empresa"></div>',
-            unsafe_allow_html=True,
-        )
-
     st.header("Configuração")
     tipo_relatorio = st.selectbox(
         "Tipo de relatório",
@@ -164,7 +209,44 @@ with st.sidebar:
             "MRP — TC/TP",
         ],
     )
-    st.info("O conversor não calcula MRP. Ele transforma, agrupa, valida e exporta os dados para uso posterior.")
+
+    st.divider()
+    st.caption("Identidade visual")
+    logo_empresa = st.file_uploader(
+        "Alterar logo da empresa",
+        type=["png", "jpg", "jpeg", "svg"],
+        key="logo_empresa",
+        help="A imagem selecionada substitui a logo padrão apenas durante a sessão atual.",
+    )
+    if logo_empresa is not None:
+        logo_bytes = logo_empresa.getvalue()
+        logo_mime = logo_empresa.type or "image/png"
+
+    st.info(
+        "O conversor não calcula MRP. Ele transforma, agrupa, valida e exporta os dados para uso posterior."
+    )
+
+
+if logo_bytes:
+    logo_base64 = base64.b64encode(logo_bytes).decode("ascii")
+    mime = logo_mime or "image/png"
+    logo_html = f'<img src="data:{mime};base64,{logo_base64}" alt="Setta">'
+else:
+    logo_html = '<div style="font-size:2rem;font-weight:800;color:#202124;">SETTA</div>'
+
+st.markdown(
+    f'<div class="setta-logo-card">{logo_html}</div>',
+    unsafe_allow_html=True,
+)
+st.markdown('<h1 class="app-title">CONVERSOR MRP | SETTA</h1>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="app-subtitle">Conversão e validação de relatórios brutos do ERP para Excel tratado.</p>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<div class="app-info">Selecione o tipo de relatório no menu lateral, envie os arquivos brutos e gere a base tratada para utilização no MRP.</div>',
+    unsafe_allow_html=True,
+)
 
 
 if tipo_relatorio == "Relatório Geral":
