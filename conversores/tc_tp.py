@@ -129,17 +129,33 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     bom = _preparar_h001(h001_bruto)
     codigos_h001 = set(bom["CÓDIGO PRODUTO"].unique())
     pmp = _preparar_pmp(pmp_bruto, codigos_h001)
-    base = pmp.merge(bom, on="CÓDIGO PRODUTO", how="left", indicator=True)
+    vinculos = pmp.merge(bom, on="CÓDIGO PRODUTO", how="left", indicator=True)
 
     sem_codigo = pmp[~pmp["CÓDIGO PRODUTO"].isin(codigos_h001)][
         ["ORDEM DE PRODUÇÃO", "DESCRIÇÃO PRODUTO", "CÓDIGO UNIFICADO", "CÓDIGO ALTERNATIVO"]
     ].drop_duplicates()
-    sem_bom = base.loc[
-        (base["_merge"] == "left_only") | base["MATERIAL"].isna(),
+
+    sem_bom = vinculos.loc[
+        (vinculos["_merge"] == "left_only") | vinculos["MATERIAL"].isna(),
         ["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "DESCRIÇÃO PRODUTO"],
     ].drop_duplicates()
-    base = base[base["_merge"] == "both"].copy()
-    base.drop(columns=["_merge"], inplace=True)
+
+    # Linhas com BOM seguem normalmente, uma linha por material.
+    base_com_bom = vinculos[vinculos["_merge"] == "both"].copy()
+    base_com_bom.drop(columns=["_merge"], inplace=True)
+
+    # OFs programadas sem lista de material não podem desaparecer do relatório.
+    # Mantemos exatamente uma linha por OF, preservando os dados do PMP e zerando
+    # somente as informações que dependeriam da BOM.
+    base_sem_bom = vinculos[vinculos["_merge"] == "left_only"].copy()
+    if not base_sem_bom.empty:
+        base_sem_bom = base_sem_bom.drop_duplicates(subset=["ORDEM DE PRODUÇÃO"], keep="first")
+        base_sem_bom["MATERIAL"] = "00000000"
+        base_sem_bom["DESCRIÇÃO MATERIAL"] = ""
+        base_sem_bom["QUANTIDADE POR OF"] = 0.0
+        base_sem_bom.drop(columns=["_merge"], inplace=True)
+
+    base = pd.concat([base_com_bom, base_sem_bom], ignore_index=True, sort=False)
 
     base["DATA DE NECESSIDADE"] = base["DATA DE ENTREGA"].map(
         lambda x: x - pd.Timedelta(days=30) if pd.notna(x) else pd.NaT
@@ -174,12 +190,20 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
 
     base["NECESSIDADE TOTAL DA SEMANA"] = 0.0
     mask_necessidade = base["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
-    if mask_necessidade.any():
-        base.loc[mask_necessidade, "NECESSIDADE TOTAL DA SEMANA"] = (
-            base.loc[mask_necessidade]
+    mask_material_real = base["MATERIAL"].ne("00000000")
+    mask_calculo = mask_necessidade & mask_material_real
+    if mask_calculo.any():
+        base.loc[mask_calculo, "NECESSIDADE TOTAL DA SEMANA"] = (
+            base.loc[mask_calculo]
             .groupby(["MATERIAL", "SEMANA DE NECESSIDADE"])["QUANTIDADE POR OF"]
             .transform("sum")
         )
+
+    # Para OF sem BOM, as informações dependentes da lista de material devem
+    # permanecer zeradas, sem interferir nos totais dos materiais reais.
+    mask_sem_bom_saida = base["MATERIAL"].eq("00000000")
+    base.loc[mask_sem_bom_saida, "QUANTIDADE POR OF"] = 0.0
+    base.loc[mask_sem_bom_saida, "NECESSIDADE TOTAL DA SEMANA"] = 0.0
 
     colunas = [
         "ORDEM DE PRODUÇÃO",
@@ -225,7 +249,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
             )
     if not sem_bom.empty:
         avisos.append(
-            f"{len(sem_bom)} OF(s) programada(s) permaneceram sem BOM após as duas tentativas de vínculo."
+            f"{len(sem_bom)} OF(s) programada(s) permaneceram sem BOM e foram mantidas no relatório com uma única linha e informações de material zeradas."
         )
 
     inconsistencias = []
@@ -236,7 +260,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
                 "ORDEM DE PRODUÇÃO": row["ORDEM DE PRODUÇÃO"],
                 "CÓDIGO UNIFICADO (P)": row["CÓDIGO UNIFICADO"],
                 "CÓDIGO ALTERNATIVO (C)": row["CÓDIGO ALTERNATIVO"],
-                "MENSAGEM": "Nenhum dos dois códigos foi localizado na coluna F do H001.",
+                "MENSAGEM": "Nenhum dos dois códigos foi localizado na coluna F do H001. OF mantida no relatório com material zerado.",
             }
         )
     validacao = pd.DataFrame(inconsistencias)
@@ -251,10 +275,10 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     metricas = {
         "linhas_pmp_brutas": len(pmp_bruto),
         "ofs_programadas": len(pmp),
-        "ofs_com_bom": base["ORDEM DE PRODUÇÃO"].nunique(),
+        "ofs_com_bom": base_com_bom["ORDEM DE PRODUÇÃO"].nunique(),
         "linhas_bom": len(bom),
         "linhas_resultado": len(base),
-        "materiais_unicos": base["MATERIAL"].nunique(),
+        "materiais_unicos": base_com_bom["MATERIAL"].nunique(),
         "of_sem_codigo": len(sem_codigo),
         "of_sem_bom": len(sem_bom),
         "of_vinculadas_por_c": len(recuperadas_por_c),
