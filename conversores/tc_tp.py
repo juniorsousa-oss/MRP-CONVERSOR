@@ -77,14 +77,27 @@ def _preparar_pmp(pmp, codigos_h001):
     dados["DATA DE ENTREGA"] = dados.iloc[:, 11].map(_data)
 
     conjunto_codigos = set(codigos_h001)
+
+    # Regra do código do produto:
+    # 1) se o código unificado/duplicado (P) existir no H001, ele é o vínculo principal;
+    # 2) se P não vincular, usamos o código inicial da OP (coluna C) como fallback;
+    #    mesmo quando C também não possui BOM, ele deve aparecer no relatório para
+    #    identificar corretamente a OP sem lista de engenharia;
+    # 3) somente quando C estiver vazio mantemos P como identificação visual.
     dados["CÓDIGO PRODUTO"] = dados["CÓDIGO UNIFICADO"]
     dados["FONTE CÓDIGO"] = "P"
-    mascara_fallback = ~dados["CÓDIGO UNIFICADO"].isin(conjunto_codigos)
-    mascara_c_valido = dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos)
-    dados.loc[mascara_fallback & mascara_c_valido, "CÓDIGO PRODUTO"] = dados.loc[
-        mascara_fallback & mascara_c_valido, "CÓDIGO ALTERNATIVO"
+
+    mascara_p_vincula = dados["CÓDIGO UNIFICADO"].isin(conjunto_codigos)
+    mascara_c_informado = dados["CÓDIGO ALTERNATIVO"].ne("")
+    mascara_c_vincula = dados["CÓDIGO ALTERNATIVO"].isin(conjunto_codigos)
+    mascara_fallback_c = ~mascara_p_vincula & mascara_c_informado
+
+    dados.loc[mascara_fallback_c, "CÓDIGO PRODUTO"] = dados.loc[
+        mascara_fallback_c, "CÓDIGO ALTERNATIVO"
     ]
-    dados.loc[mascara_fallback & mascara_c_valido, "FONTE CÓDIGO"] = "C"
+    dados.loc[mascara_fallback_c & mascara_c_vincula, "FONTE CÓDIGO"] = "C"
+    dados.loc[mascara_fallback_c & ~mascara_c_vincula, "FONTE CÓDIGO"] = "C_SEM_BOM"
+
     return dados[
         [
             "ORDEM DE PRODUÇÃO",
@@ -132,7 +145,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     vinculos = pmp.merge(bom, on="CÓDIGO PRODUTO", how="left", indicator=True)
 
     sem_codigo = pmp[~pmp["CÓDIGO PRODUTO"].isin(codigos_h001)][
-        ["ORDEM DE PRODUÇÃO", "DESCRIÇÃO PRODUTO", "CÓDIGO UNIFICADO", "CÓDIGO ALTERNATIVO"]
+        ["ORDEM DE PRODUÇÃO", "DESCRIÇÃO PRODUTO", "CÓDIGO UNIFICADO", "CÓDIGO ALTERNATIVO", "CÓDIGO PRODUTO"]
     ].drop_duplicates()
 
     sem_bom = vinculos.loc[
@@ -140,13 +153,9 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         ["ORDEM DE PRODUÇÃO", "CÓDIGO PRODUTO", "DESCRIÇÃO PRODUTO"],
     ].drop_duplicates()
 
-    # Linhas com BOM seguem normalmente, uma linha por material.
     base_com_bom = vinculos[vinculos["_merge"] == "both"].copy()
     base_com_bom.drop(columns=["_merge"], inplace=True)
 
-    # OFs programadas sem lista de material não podem desaparecer do relatório.
-    # Mantemos exatamente uma linha por OF, preservando os dados do PMP e zerando
-    # somente as informações que dependeriam da BOM.
     base_sem_bom = vinculos[vinculos["_merge"] == "left_only"].copy()
     if not base_sem_bom.empty:
         base_sem_bom = base_sem_bom.drop_duplicates(subset=["ORDEM DE PRODUÇÃO"], keep="first")
@@ -199,8 +208,6 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
             .transform("sum")
         )
 
-    # Para OF sem BOM, as informações dependentes da lista de material devem
-    # permanecer zeradas, sem interferir nos totais dos materiais reais.
     mask_sem_bom_saida = base["MATERIAL"].eq("00000000")
     base.loc[mask_sem_bom_saida, "QUANTIDADE POR OF"] = 0.0
     base.loc[mask_sem_bom_saida, "NECESSIDADE TOTAL DA SEMANA"] = 0.0
@@ -232,21 +239,23 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     avisos = []
     if not sem_codigo.empty:
         avisos.append(
-            f"{len(sem_codigo)} OF(s) programada(s) não conseguiram localizar o código da coluna P nem o código alternativo da coluna C no H001."
+            f"{len(sem_codigo)} OF(s) programada(s) não conseguiram localizar o código unificado nem o código inicial no H001. O código inicial foi preservado no relatório sempre que informado."
         )
         for _, row in sem_codigo.iterrows():
             avisos.append(
-                f"OF {row['ORDEM DE PRODUÇÃO']} — código P: {row['CÓDIGO UNIFICADO'] or 'NÃO INFORMADO'} — código C: {row['CÓDIGO ALTERNATIVO'] or 'NÃO INFORMADO'} — nenhum dos dois foi localizado no H001."
+                f"OF {row['ORDEM DE PRODUÇÃO']} — código P: {row['CÓDIGO UNIFICADO'] or 'NÃO INFORMADO'} — código inicial C: {row['CÓDIGO ALTERNATIVO'] or 'NÃO INFORMADO'} — código exibido: {row['CÓDIGO PRODUTO'] or 'NÃO INFORMADO'} — sem BOM no H001."
             )
+
     recuperadas_por_c = pmp[pmp["FONTE CÓDIGO"] == "C"]
     if not recuperadas_por_c.empty:
         avisos.append(
-            f"{len(recuperadas_por_c)} OF(s) foram vinculadas pelo código da coluna C porque o código da coluna P não foi localizado no H001."
+            f"{len(recuperadas_por_c)} OF(s) foram vinculadas pelo código inicial da coluna C porque o código da coluna P não foi localizado no H001."
         )
         for _, row in recuperadas_por_c.iterrows():
             avisos.append(
                 f"OF {row['ORDEM DE PRODUÇÃO']} — código P: {row['CÓDIGO UNIFICADO'] or 'NÃO INFORMADO'} — vinculado pelo código C: {row['CÓDIGO ALTERNATIVO']}."
             )
+
     if not sem_bom.empty:
         avisos.append(
             f"{len(sem_bom)} OF(s) programada(s) permaneceram sem BOM e foram mantidas no relatório com uma única linha e informações de material zeradas."
@@ -259,8 +268,9 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
                 "TIPO": "BOM NÃO ENCONTRADA",
                 "ORDEM DE PRODUÇÃO": row["ORDEM DE PRODUÇÃO"],
                 "CÓDIGO UNIFICADO (P)": row["CÓDIGO UNIFICADO"],
-                "CÓDIGO ALTERNATIVO (C)": row["CÓDIGO ALTERNATIVO"],
-                "MENSAGEM": "Nenhum dos dois códigos foi localizado na coluna F do H001. OF mantida no relatório com material zerado.",
+                "CÓDIGO INICIAL (C)": row["CÓDIGO ALTERNATIVO"],
+                "CÓDIGO EXIBIDO": row["CÓDIGO PRODUTO"],
+                "MENSAGEM": "Nenhum dos códigos foi localizado na coluna F do H001. OF mantida no relatório com o código inicial quando disponível e material zerado.",
             }
         )
     validacao = pd.DataFrame(inconsistencias)
@@ -268,7 +278,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         validacao = pd.DataFrame(
             columns=[
                 "TIPO", "ORDEM DE PRODUÇÃO", "CÓDIGO UNIFICADO (P)",
-                "CÓDIGO ALTERNATIVO (C)", "MENSAGEM",
+                "CÓDIGO INICIAL (C)", "CÓDIGO EXIBIDO", "MENSAGEM",
             ]
         )
 
