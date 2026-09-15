@@ -1,10 +1,13 @@
 """Pacote de conversores do MRP-CONVERSOR.
 
-Também mantém a logo personalizada selecionada no Streamlit entre reruns e
-novas sessões enquanto a instância do aplicativo permanecer ativa.
+Mantém a logo personalizada selecionada no Streamlit entre reruns e novas
+sessões enquanto a instância do aplicativo permanecer ativa e protege a
+alteração da identidade visual com senha administrativa.
 """
 
+import hmac
 import json
+import os
 from pathlib import Path
 
 import streamlit as st
@@ -68,20 +71,85 @@ def _carregar_logo_persistida():
     return None
 
 
+def _senha_logo_configurada() -> str:
+    """Busca a senha sem expô-la no repositório público."""
+    senha = ""
+    try:
+        senha = st.secrets.get("LOGO_ADMIN_PASSWORD", "")
+    except Exception:
+        senha = ""
+
+    if not senha:
+        senha = os.getenv("LOGO_ADMIN_PASSWORD", "")
+
+    return str(senha or "")
+
+
+def _alteracao_logo_autorizada() -> bool:
+    senha_configurada = _senha_logo_configurada()
+
+    if not senha_configurada:
+        st.warning(
+            "Alteração da logo bloqueada: a senha administrativa ainda não foi configurada."
+        )
+        return False
+
+    if st.session_state.get("_logo_admin_autorizado", False):
+        st.success("Alteração da logo liberada nesta sessão.")
+        if st.button(
+            "Bloquear alteração da logo",
+            key="_logo_admin_bloquear",
+            use_container_width=True,
+        ):
+            st.session_state["_logo_admin_autorizado"] = False
+            st.session_state.pop("_logo_admin_senha", None)
+            st.rerun()
+        return True
+
+    senha_digitada = st.text_input(
+        "Senha para alterar a logo",
+        type="password",
+        key="_logo_admin_senha",
+        placeholder="Digite a senha administrativa",
+    )
+
+    if st.button(
+        "Liberar alteração da logo",
+        key="_logo_admin_liberar",
+        use_container_width=True,
+    ):
+        if hmac.compare_digest(str(senha_digitada), senha_configurada):
+            st.session_state["_logo_admin_autorizado"] = True
+            st.session_state.pop("_logo_admin_senha", None)
+            st.rerun()
+        else:
+            st.error("Senha incorreta.")
+
+    return False
+
+
 _file_uploader_original = st.file_uploader
 
 
 def _file_uploader_com_logo_persistente(*args, **kwargs):
-    resultado = _file_uploader_original(*args, **kwargs)
-
     if kwargs.get("key") != "logo_empresa":
-        return resultado
+        return _file_uploader_original(*args, **kwargs)
+
+    logo_atual = _carregar_logo_persistida()
+
+    # O seletor de relatório continua totalmente livre. Somente o uploader
+    # responsável por trocar a logo exige autenticação.
+    if not _alteracao_logo_autorizada():
+        return logo_atual
+
+    kwargs["help"] = "Selecione a nova logo da empresa. A alteração exige autorização administrativa."
+    resultado = _file_uploader_original(*args, **kwargs)
 
     if resultado is not None:
         _salvar_logo(resultado)
         return resultado
 
-    return _carregar_logo_persistida()
+    return logo_atual
 
 
 if not getattr(st.file_uploader, "_mrp_logo_persistente", False):
