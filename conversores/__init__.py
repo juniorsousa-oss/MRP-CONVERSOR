@@ -215,7 +215,6 @@ def _file_uploader_com_logo_persistente(*args, **kwargs):
             return logo_atual
 
         st.markdown("**Nova logo**")
-        kwargs["label"] = "Arquivo da logo"
         kwargs["help"] = (
             "Selecione a nova logo da empresa. A alteração está liberada "
             "somente nesta sessão."
