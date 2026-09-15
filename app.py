@@ -11,9 +11,9 @@ from conversores.relatorio_geral import processar_relatorio_geral
 from conversores.compras import processar_compras
 from conversores.tc_tp import processar_tc_tp
 
-favicon = Image.open("favicon.png.png")
+FAVICON = Path(__file__).parent / "favicon.png.png"
 
-st.set_page_config(page_title="CONVERSOR | SETTA ", page_icon=favicon, layout="wide")
+st.set_page_config(page_title="CONVERSOR | SETTA ", page_icon=str(FAVICON), layout="wide")
 st.title("MRP-CONVERSOR")
 st.caption("Conversão e validação de relatórios brutos do ERP para Excel tratado.")
 
