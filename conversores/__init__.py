@@ -1,8 +1,9 @@
 """Pacote de conversores do MRP-CONVERSOR.
 
 Mantém a logo personalizada selecionada no Streamlit entre reruns e novas
-sessões enquanto a instância do aplicativo permanecer ativa e protege a
-alteração da identidade visual com senha administrativa.
+sessões enquanto a instância do aplicativo permanecer ativa, protege a
+alteração da identidade visual com senha administrativa e organiza o menu
+lateral em blocos visuais distintos.
 """
 
 import hmac
@@ -18,7 +19,7 @@ _CONFIG_DIR = _BASE_DIR / "config"
 _LOGO_BYTES = _CONFIG_DIR / "logo_usuario.bin"
 _LOGO_META = _CONFIG_DIR / "logo_usuario.json"
 _logo_memoria = {"bytes": None, "mime": None, "nome": None}
-_WRAPPER_VERSION = "logo-auth-v2"
+_WRAPPER_VERSION = "logo-auth-sidebar-v3"
 
 
 class _LogoPersistida:
@@ -100,8 +101,7 @@ def _senha_logo_configurada() -> str:
         if senha:
             return senha
 
-        # Também aceita configurações organizadas em seções TOML, por exemplo:
-        # [auth]\nLOGO_ADMIN_PASSWORD = "..."
+        # Também aceita configurações organizadas em seções TOML.
         for secao in ("auth", "passwords", "admin", "logo"):
             try:
                 bloco = st.secrets.get(secao, {})
@@ -126,15 +126,15 @@ def _alteracao_logo_autorizada() -> bool:
 
     if not senha_configurada:
         st.warning(
-            "Alteração da logo bloqueada: não encontrei a senha nos Secrets. "
-            "Use LOGO_ADMIN_PASSWORD = \"sua_senha\" e reinicie o app."
+            "Senha administrativa não configurada nos Secrets. "
+            "Use LOGO_ADMIN_PASSWORD e reinicie o app."
         )
         return False
 
     if st.session_state.get("_logo_admin_autorizado", False):
-        st.success("Alteração da logo liberada nesta sessão.")
+        st.success("Acesso administrativo liberado nesta sessão.")
         if st.button(
-            "Bloquear alteração da logo",
+            "Bloquear edição",
             key="_logo_admin_bloquear",
             use_container_width=True,
         ):
@@ -143,16 +143,16 @@ def _alteracao_logo_autorizada() -> bool:
             st.rerun()
         return True
 
-    st.caption("Alteração da logo protegida por senha.")
+    st.caption("🔒 Área protegida — somente para alteração da identidade visual.")
     senha_digitada = st.text_input(
-        "Senha para alterar a logo",
+        "Senha administrativa",
         type="password",
         key="_logo_admin_senha",
-        placeholder="Digite a senha administrativa",
+        placeholder="Digite a senha",
     )
 
     if st.button(
-        "Liberar alteração da logo",
+        "Liberar edição",
         key="_logo_admin_liberar",
         use_container_width=True,
     ):
@@ -166,12 +166,37 @@ def _alteracao_logo_autorizada() -> bool:
     return False
 
 
-# Guarda a função original uma única vez. Isso evita encadear wrappers em
+# Guarda os componentes originais uma única vez para não encadear wrappers em
 # reruns/reloads do Streamlit.
 if not hasattr(st, "_mrp_file_uploader_original"):
     st._mrp_file_uploader_original = st.file_uploader
+if not hasattr(st, "_mrp_selectbox_original"):
+    st._mrp_selectbox_original = st.selectbox
+if not hasattr(st, "_mrp_caption_original"):
+    st._mrp_caption_original = st.caption
 
 _file_uploader_original = st._mrp_file_uploader_original
+_selectbox_original = st._mrp_selectbox_original
+_caption_original = st._mrp_caption_original
+
+
+def _selectbox_com_card(*args, **kwargs):
+    label = args[0] if args else kwargs.get("label", "")
+    if label != "Tipo de relatório":
+        return _selectbox_original(*args, **kwargs)
+
+    with st.container(border=True):
+        st.markdown("**RELATÓRIO**")
+        st.caption("Escolha qual base será tratada pelo conversor.")
+        return _selectbox_original(*args, **kwargs)
+
+
+def _caption_com_layout(*args, **kwargs):
+    texto = args[0] if args else kwargs.get("body", "")
+    # O título da identidade visual passa a ser exibido dentro do card próprio.
+    if texto == "Identidade visual":
+        return None
+    return _caption_original(*args, **kwargs)
 
 
 def _file_uploader_com_logo_persistente(*args, **kwargs):
@@ -180,27 +205,38 @@ def _file_uploader_com_logo_persistente(*args, **kwargs):
 
     logo_atual = _carregar_logo_persistida()
 
-    # O seletor do tipo de relatório permanece livre. Apenas a troca da logo
-    # passa pelo desbloqueio administrativo.
-    if not _alteracao_logo_autorizada():
-        return logo_atual
+    with st.container(border=True):
+        st.markdown("**IDENTIDADE VISUAL**")
+        st.caption("Logo da empresa e configurações administrativas.")
 
-    kwargs["help"] = (
-        "Selecione a nova logo da empresa. A alteração está liberada "
-        "somente nesta sessão."
-    )
-    resultado = _file_uploader_original(*args, **kwargs)
+        # O seletor do tipo de relatório permanece livre. Apenas a troca da logo
+        # passa pelo desbloqueio administrativo.
+        if not _alteracao_logo_autorizada():
+            return logo_atual
 
-    if resultado is not None:
-        _salvar_logo(resultado)
-        return resultado
+        st.markdown("**Nova logo**")
+        kwargs["label"] = "Arquivo da logo"
+        kwargs["help"] = (
+            "Selecione a nova logo da empresa. A alteração está liberada "
+            "somente nesta sessão."
+        )
+        resultado = _file_uploader_original(*args, **kwargs)
+
+        if resultado is not None:
+            _salvar_logo(resultado)
+            st.success("Logo atualizada para esta instância do aplicativo.")
+            return resultado
 
     return logo_atual
 
 
+_selectbox_com_card._mrp_sidebar_wrapper_version = _WRAPPER_VERSION
 _file_uploader_com_logo_persistente._mrp_logo_persistente = True
 _file_uploader_com_logo_persistente._mrp_logo_wrapper_version = _WRAPPER_VERSION
+_caption_com_layout._mrp_sidebar_wrapper_version = _WRAPPER_VERSION
 
-# Aplicação deliberadamente incondicional: versões anteriores usavam uma flag
-# genérica que podia manter o wrapper antigo carregado em memória após deploy.
+# Aplicação deliberadamente incondicional para substituir versões antigas que
+# possam permanecer carregadas em memória após deploy.
+st.selectbox = _selectbox_com_card
 st.file_uploader = _file_uploader_com_logo_persistente
+st.caption = _caption_com_layout
