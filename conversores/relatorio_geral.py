@@ -10,6 +10,7 @@ import pandas as pd
 COLUNAS_OBRIGATORIAS = [
     "Projeto",
     "Código",
+    "Descrição",
     "Última solicitação",
     "Qtd. necessária",
     "Qtd. atendida",
@@ -23,6 +24,7 @@ COLUNAS_SAIDA = [
     "COD_MRP",
     "Projeto",
     "Código",
+    "Descrição",
     "Última solicitação",
     "Qtd. necessária",
     "Qtd. atendida",
@@ -33,9 +35,11 @@ COLUNAS_SAIDA = [
     "Data de conferência",
     "DATA MRP",
     "DATA CM",
+    "CONDIÇÃO",
     "SEMANA DE NECESSIDADE",
     "PERIODO DA SEMANA",
     "NECESSIDADE DA SEMANA",
+    "VINCULAÇÃO DA DATA",
 ]
 
 
@@ -112,28 +116,38 @@ def _nomes_unicos(grupo: pd.Series) -> str:
     return " | ".join(nomes)
 
 
-def _domingo_da_semana(data_referencia: date) -> date | None:
-    primeiro_domingo = date(data_referencia.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-    if data_referencia < primeiro_domingo:
-        return None
+def _primeiro_texto(grupo: pd.Series) -> str:
+    for valor in grupo:
+        texto = _texto(valor)
+        if texto:
+            return texto
+    return ""
+
+
+def _domingo_da_semana(data_referencia: date) -> date:
     return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
 
 
 def _semana_operacional(valor: Any, hoje: date) -> tuple[str, str]:
+    """Calcula a semana operacional (domingo a sábado).
+
+    A DATA MRP exibida nunca é alterada. Somente a semana é corrigida:
+    datas anteriores a hoje e registros sem data são posicionados na semana atual.
+    """
     if pd.isna(valor):
-        return "", ""
-    data_original = pd.Timestamp(valor).date()
-    primeiro_domingo = date(data_original.year, 1, 1)
+        data_calculo = hoje
+    else:
+        data_original = pd.Timestamp(valor).date()
+        data_calculo = hoje if data_original < hoje else data_original
+
+    primeiro_domingo = date(data_calculo.year, 1, 1)
     while primeiro_domingo.weekday() != 6:
         primeiro_domingo += timedelta(days=1)
-    if data_original < primeiro_domingo:
-        return "", ""
-    data_calculo = hoje if data_original < hoje else data_original
+
     domingo = _domingo_da_semana(data_calculo)
-    if domingo is None:
-        return "", ""
+    if domingo < primeiro_domingo:
+        domingo = primeiro_domingo
+
     semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
     sabado = domingo + timedelta(days=6)
     return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
@@ -187,8 +201,10 @@ def _detectar_coluna_condicao(base: pd.DataFrame) -> int | None:
 
 
 def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
-    if for001.shape[1] < 13:
-        return None, ["FOR-001: não há colunas suficientes para localizar OP e DATA MRP."]
+    if for001.shape[1] < 15:
+        return None, [
+            "FOR-001: não há colunas suficientes para localizar OP, DATA DE ENTREGA - CLIENTE, DT MRP e CONDIÇÃO."
+        ]
 
     base = for001.copy()
 
@@ -199,14 +215,23 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
     if idx_op is None:
         idx_op = 0
 
+    idx_cliente = _indice_coluna_por_cabecalho(
+        base,
+        ["DATA DE ENTREGA - CLIENTE", "DATA DE ENTREGA CLIENTE", "DATA ENTREGA CLIENTE"],
+    )
+    if idx_cliente is None:
+        idx_cliente = 12 if base.shape[1] > 12 else None
+
     idx_mrp = _indice_coluna_por_cabecalho(base, ["DT MRP", "DATA MRP"])
     if idx_mrp is None:
-        idx_mrp = 12 if base.shape[1] > 12 else None
+        idx_mrp = 13 if base.shape[1] > 13 else None
 
     idx_cond = _detectar_coluna_condicao(base)
-    if idx_cond is None and base.shape[1] > 13:
-        idx_cond = 13
+    if idx_cond is None and base.shape[1] > 14:
+        idx_cond = 14
 
+    if idx_cliente is None:
+        return None, ["FOR-001: não foi possível localizar a coluna DATA DE ENTREGA - CLIENTE."]
     if idx_mrp is None:
         return None, ["FOR-001: não foi possível localizar a coluna DT MRP."]
     if idx_cond is None:
@@ -214,36 +239,46 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
 
     avisos.append(
         f"FOR-001: OP lida da coluna {_letra_coluna(idx_op)}, "
+        f"DATA CLIENTE da coluna {_letra_coluna(idx_cliente)}, "
         f"DT MRP da coluna {_letra_coluna(idx_mrp)} e CONDIÇÃO da coluna {_letra_coluna(idx_cond)}."
     )
 
     base["_OP"] = base.iloc[:, idx_op].map(_normalizar_op)
+    base["_DATA_CLIENTE"] = pd.to_datetime(base.iloc[:, idx_cliente], errors="coerce", dayfirst=True)
     base["_DT_MRP"] = pd.to_datetime(base.iloc[:, idx_mrp], errors="coerce", dayfirst=True)
     base["_CONDICAO"] = base.iloc[:, idx_cond].map(_texto).str.upper()
     base = base[base["_OP"] != ""].copy()
-
-    com_data = int(base["_DT_MRP"].notna().sum())
-    com_condicao = int(base["_CONDICAO"].map(_parece_condicao).sum())
-    if com_data and not com_condicao:
-        return None, [
-            "FOR-001: a DATA MRP foi localizada, mas nenhuma CONDIÇÃO válida foi encontrada. "
-            "O processamento foi interrompido para evitar gerar semanas incorretas."
-        ]
 
     registros = {}
     conflitos = 0
     for _, row in base.iterrows():
         op = row["_OP"]
+        data_cliente = row["_DATA_CLIENTE"]
         dt_mrp = row["_DT_MRP"]
         cond = row["_CONDICAO"]
         atual = registros.get(op)
         if atual is None:
-            registros[op] = {"data_mrp": dt_mrp, "condicao": cond}
+            registros[op] = {
+                "data_cliente": data_cliente,
+                "data_mrp": dt_mrp,
+                "condicao": cond,
+            }
             continue
-        if not pd.isna(dt_mrp) and (pd.isna(atual["data_mrp"]) or dt_mrp != atual["data_mrp"]):
+
+        if not pd.isna(data_cliente) and (
+            pd.isna(atual["data_cliente"]) or data_cliente != atual["data_cliente"]
+        ):
+            if not pd.isna(atual["data_cliente"]):
+                conflitos += 1
+            atual["data_cliente"] = data_cliente
+
+        if not pd.isna(dt_mrp) and (
+            pd.isna(atual["data_mrp"]) or dt_mrp != atual["data_mrp"]
+        ):
             if not pd.isna(atual["data_mrp"]):
                 conflitos += 1
             atual["data_mrp"] = dt_mrp
+
         if cond and cond != "-" and cond != atual["condicao"]:
             if atual["condicao"] and atual["condicao"] != "-":
                 conflitos += 1
@@ -251,7 +286,10 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
 
     avisos.append(f"FOR-001: {len(registros):,} OP(s) válidas carregadas para vínculo.".replace(",", "."))
     if conflitos:
-        avisos.append(f"FOR-001: {conflitos} ocorrência(s) de OP com mais de uma DATA MRP/CONDIÇÃO; foi mantido o último registro válido encontrado.")
+        avisos.append(
+            f"FOR-001: {conflitos} ocorrência(s) de OP com mais de uma DATA CLIENTE/DT MRP/CONDIÇÃO; "
+            "foi mantido o último registro válido encontrado."
+        )
     return registros, []
 
 
@@ -377,13 +415,17 @@ def processar_relatorio_geral(
     duplicadas = int(df.duplicated("COD_MRP", keep=False).sum())
     grupos_duplicados = int(df.loc[df.duplicated("COD_MRP", keep=False), "COD_MRP"].nunique())
     if duplicadas:
-        avisos.append(f"{duplicadas} linha(s) pertencem a {grupos_duplicados} COD_MRP duplicado(s) e foram agrupadas; nenhuma foi simplesmente excluída.")
+        avisos.append(
+            f"{duplicadas} linha(s) pertencem a {grupos_duplicados} COD_MRP duplicado(s) e foram agrupadas; "
+            "nenhuma foi simplesmente excluída."
+        )
 
     agrupado = (
         df.groupby("COD_MRP", sort=False, dropna=False)
         .agg(
             Projeto=("Projeto", "first"),
             Código=("Código", "first"),
+            Descrição=("Descrição", _primeiro_texto),
             **{
                 "Última solicitação": ("Última solicitação", "max"),
                 "Qtd. necessária": ("Qtd. necessária", "sum"),
@@ -410,62 +452,62 @@ def processar_relatorio_geral(
             f"foi vinculada a {op_pcp} por PSY + sequencial final, com correspondência única em FOR-001 e FOR-022."
         )
 
-    agrupado["DATA MRP"] = agrupado["_OP_PCP"].map(
-        lambda op: (
-            mapa001.get(op, {}).get("data_mrp", pd.NaT) - pd.Timedelta(days=30)
-            if op and not pd.isna(mapa001.get(op, {}).get("data_mrp", pd.NaT))
-            else pd.NaT
-        )
+    def resolver_data_mrp(op: str):
+        if not op or op not in mapa001:
+            return pd.NaT, "SEM DATA"
+        registro = mapa001.get(op, {})
+        data_mrp = registro.get("data_mrp", pd.NaT)
+        if not pd.isna(data_mrp):
+            return data_mrp, "DATA MRP"
+        data_cliente = registro.get("data_cliente", pd.NaT)
+        if not pd.isna(data_cliente):
+            return data_cliente, "DATA CLIENTE"
+        return pd.NaT, "SEM DATA"
+
+    datas_resolvidas = agrupado["_OP_PCP"].map(resolver_data_mrp)
+    agrupado["_DATA_MRP_RESOLVIDA"] = datas_resolvidas.map(lambda x: x[0])
+    agrupado["VINCULAÇÃO DA DATA"] = datas_resolvidas.map(lambda x: x[1])
+
+    agrupado["CONDIÇÃO"] = agrupado["_OP_PCP"].map(
+        lambda op: mapa001.get(op, {}).get("condicao", "") if op and op in mapa001 else "NI"
     )
-    agrupado["_CONDICAO_PCP"] = agrupado["_OP_PCP"].map(
-        lambda op: mapa001.get(op, {}).get("condicao", "") if op else ""
-    )
+    agrupado["CONDIÇÃO"] = agrupado["CONDIÇÃO"].map(lambda x: _texto(x) or "NI")
+
     agrupado["DATA CM"] = agrupado["_OP_PCP"].map(
         lambda op: mapa022.get(op, pd.NaT) if op else pd.NaT
     )
 
-    def definir_semana(row):
-        cond = _texto(row["_CONDICAO_PCP"]).upper()
-        if cond == "NORMAL":
-            semana, periodo = _semana_operacional(row["DATA MRP"], date.today())
-            if semana:
-                return semana, periodo
-            return "SEM INFORMAÇÃO", ""
-        if cond and cond != "-" and re.search(r"[A-ZÀ-Ý]", cond):
-            return cond, ""
-        return "SEM INFORMAÇÃO", ""
-
-    semanas = agrupado.apply(definir_semana, axis=1)
+    hoje = date.today()
+    semanas = agrupado["_DATA_MRP_RESOLVIDA"].map(lambda valor: _semana_operacional(valor, hoje))
     agrupado["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
     agrupado["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
 
-    # Regra definitiva: a quantidade considerada para a demanda semanal é a PENDÊNCIA.
-    # Se a semana não for numérica, a pendência considerada para o MRP é ZERO.
-    # Portanto SUSPENSO, FINALIZADO, CANCELADO e SEM INFORMAÇÃO nunca entram no total.
-    agrupado["_PENDENCIA_CONSIDERADA"] = 0.0
-    mask_semana_numerica = agrupado["SEMANA DE NECESSIDADE"].str.match(r"^\d{2}$", na=False)
-    agrupado.loc[mask_semana_numerica, "_PENDENCIA_CONSIDERADA"] = agrupado.loc[
-        mask_semana_numerica, "Pendência"
-    ]
-
-    agrupado["NECESSIDADE DA SEMANA"] = 0.0
-    if mask_semana_numerica.any():
-        agrupado.loc[mask_semana_numerica, "NECESSIDADE DA SEMANA"] = (
-            agrupado.loc[mask_semana_numerica]
-            .groupby(["Código", "SEMANA DE NECESSIDADE"])["_PENDENCIA_CONSIDERADA"]
-            .transform("sum")
-        )
+    # Todos os produtos recebem semana. A data exibida permanece a data de origem,
+    # mas uma data vencida ou ausente é enquadrada na semana atual para o cálculo do MRP.
+    agrupado["NECESSIDADE DA SEMANA"] = (
+        agrupado.groupby(["Código", "SEMANA DE NECESSIDADE"])["Pendência"].transform("sum")
+    )
 
     sem_op = agrupado["_OP_PCP"].eq("") | ~agrupado["_OP_PCP"].isin(mapa001.keys())
     if sem_op.any():
-        avisos.append(f"{int(sem_op.sum())} linha(s) do Relatório Geral não tiveram a OP identificada no FOR-001.")
+        avisos.append(
+            f"{int(sem_op.sum())} linha(s) do Relatório Geral não tiveram a OP identificada no FOR-001; "
+            "DATA MRP = NI, CONDIÇÃO = NI e a semana foi posicionada na semana atual."
+        )
+
+    sem_data = agrupado["VINCULAÇÃO DA DATA"].eq("SEM DATA")
+    if sem_data.any():
+        avisos.append(
+            f"{int(sem_data.sum())} linha(s) ficaram sem DATA MRP e sem DATA CLIENTE; "
+            "a DATA MRP foi exibida como NI e a SEMANA DE NECESSIDADE foi posicionada na semana atual."
+        )
 
     sem_cm = agrupado["_OP_PCP"].eq("") | ~agrupado["_OP_PCP"].isin(mapa022.keys())
     if sem_cm.any():
         avisos.append(f"{int(sem_cm.sum())} linha(s) não tiveram a OP identificada no FOR-022; DATA CM = NI.")
 
-    agrupado["DATA MRP"] = agrupado["DATA MRP"].map(
-        lambda x: _data_exibicao(x) if not pd.isna(x) else "SEM INFORMAÇÃO"
+    agrupado["DATA MRP"] = agrupado["_DATA_MRP_RESOLVIDA"].map(
+        lambda x: _data_exibicao(x) if not pd.isna(x) else "NI"
     )
     agrupado["DATA CM"] = agrupado["DATA CM"].map(
         lambda x: _data_exibicao(x) if not pd.isna(x) else "NI"
@@ -483,6 +525,7 @@ def processar_relatorio_geral(
                 "Projeto válido": bool(re.fullmatch(r"\d{11}", str(grupo.iloc[0]["Projeto"]))),
                 "Código válido": bool(re.fullmatch(r"\d{8}", str(grupo.iloc[0]["Código"]))),
                 "Pendência recalculada": True,
+                "Semana atribuída": bool(re.fullmatch(r"\d{2}", str(grupo.iloc[0]["SEMANA DE NECESSIDADE"]))),
             }
         )
     validacao = pd.DataFrame(validacoes)
@@ -490,6 +533,10 @@ def processar_relatorio_geral(
     invalidos = int((~validacao["Projeto válido"]).sum()) + int((~validacao["Código válido"]).sum())
     if invalidos:
         erros.append(f"{invalidos} validação(ões) de código falharam após a conversão.")
+
+    sem_semana = int((~validacao["Semana atribuída"]).sum())
+    if sem_semana:
+        erros.append(f"{sem_semana} linha(s) ficaram sem semana numérica após o tratamento.")
 
     metricas = {
         "linhas_brutas": len(bruto),
