@@ -19,7 +19,54 @@ _CONFIG_DIR = _BASE_DIR / "config"
 _LOGO_BYTES = _CONFIG_DIR / "logo_usuario.bin"
 _LOGO_META = _CONFIG_DIR / "logo_usuario.json"
 _logo_memoria = {"bytes": None, "mime": None, "nome": None}
-_WRAPPER_VERSION = "logo-auth-sidebar-v3"
+_WRAPPER_VERSION = "logo-auth-sidebar-v4"
+
+
+# Reforça visualmente os controles do menu lateral. A especificidade e os
+# !important abaixo garantem que o estilo do selectbox continue visível mesmo
+# com o CSS global carregado posteriormente pelo app.py.
+st.markdown(
+    """
+    <style>
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        min-height: 46px !important;
+        background: #f7f9fc !important;
+        border: 1.5px solid #aeb8c5 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover {
+        background: #ffffff !important;
+        border-color: #7f8c9d !important;
+        box-shadow: 0 2px 5px rgba(16, 24, 40, 0.08) !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:focus-within {
+        background: #ffffff !important;
+        border-color: #3b6fc4 !important;
+        box-shadow: 0 0 0 3px rgba(59, 111, 196, 0.14) !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] label {
+        font-weight: 600 !important;
+        color: #344054 !important;
+        margin-bottom: 0.28rem !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span {
+        color: #182230 !important;
+        font-weight: 500 !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] svg {
+        color: #344054 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 class _LogoPersistida:
