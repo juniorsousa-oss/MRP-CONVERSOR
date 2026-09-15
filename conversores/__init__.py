@@ -8,6 +8,7 @@ alteração da identidade visual com senha administrativa.
 import hmac
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import streamlit as st
@@ -17,6 +18,7 @@ _CONFIG_DIR = _BASE_DIR / "config"
 _LOGO_BYTES = _CONFIG_DIR / "logo_usuario.bin"
 _LOGO_META = _CONFIG_DIR / "logo_usuario.json"
 _logo_memoria = {"bytes": None, "mime": None, "nome": None}
+_WRAPPER_VERSION = "logo-auth-v2"
 
 
 class _LogoPersistida:
@@ -44,8 +46,8 @@ def _salvar_logo(upload):
             encoding="utf-8",
         )
     except OSError:
-        # Mesmo que o filesystem não esteja disponível, a logo segue salva
-        # em memória enquanto o processo do Streamlit permanecer ativo.
+        # No Streamlit Cloud o filesystem pode ser efêmero. A logo continua
+        # disponível em memória enquanto a instância permanecer ativa.
         pass
 
 
@@ -71,18 +73,52 @@ def _carregar_logo_persistida():
     return None
 
 
+def _buscar_em_mapa(mapa, chaves):
+    if not isinstance(mapa, Mapping):
+        return ""
+    for chave in chaves:
+        try:
+            valor = mapa.get(chave, "")
+        except Exception:
+            valor = ""
+        if valor not in (None, ""):
+            return str(valor)
+    return ""
+
+
 def _senha_logo_configurada() -> str:
-    """Busca a senha sem expô-la no repositório público."""
-    senha = ""
+    """Busca a senha nos Secrets sem expô-la no repositório."""
+    chaves = (
+        "LOGO_ADMIN_PASSWORD",
+        "logo_admin_password",
+        "SENHA_LOGO",
+        "senha_logo",
+    )
+
     try:
-        senha = st.secrets.get("LOGO_ADMIN_PASSWORD", "")
+        senha = _buscar_em_mapa(st.secrets, chaves)
+        if senha:
+            return senha
+
+        # Também aceita configurações organizadas em seções TOML, por exemplo:
+        # [auth]\nLOGO_ADMIN_PASSWORD = "..."
+        for secao in ("auth", "passwords", "admin", "logo"):
+            try:
+                bloco = st.secrets.get(secao, {})
+            except Exception:
+                bloco = {}
+            senha = _buscar_em_mapa(bloco, chaves)
+            if senha:
+                return senha
     except Exception:
-        senha = ""
+        pass
 
-    if not senha:
-        senha = os.getenv("LOGO_ADMIN_PASSWORD", "")
+    for chave in chaves:
+        senha = os.getenv(chave, "")
+        if senha:
+            return str(senha)
 
-    return str(senha or "")
+    return ""
 
 
 def _alteracao_logo_autorizada() -> bool:
@@ -90,7 +126,8 @@ def _alteracao_logo_autorizada() -> bool:
 
     if not senha_configurada:
         st.warning(
-            "Alteração da logo bloqueada: a senha administrativa ainda não foi configurada."
+            "Alteração da logo bloqueada: não encontrei a senha nos Secrets. "
+            "Use LOGO_ADMIN_PASSWORD = \"sua_senha\" e reinicie o app."
         )
         return False
 
@@ -106,6 +143,7 @@ def _alteracao_logo_autorizada() -> bool:
             st.rerun()
         return True
 
+    st.caption("Alteração da logo protegida por senha.")
     senha_digitada = st.text_input(
         "Senha para alterar a logo",
         type="password",
@@ -128,7 +166,12 @@ def _alteracao_logo_autorizada() -> bool:
     return False
 
 
-_file_uploader_original = st.file_uploader
+# Guarda a função original uma única vez. Isso evita encadear wrappers em
+# reruns/reloads do Streamlit.
+if not hasattr(st, "_mrp_file_uploader_original"):
+    st._mrp_file_uploader_original = st.file_uploader
+
+_file_uploader_original = st._mrp_file_uploader_original
 
 
 def _file_uploader_com_logo_persistente(*args, **kwargs):
@@ -137,12 +180,15 @@ def _file_uploader_com_logo_persistente(*args, **kwargs):
 
     logo_atual = _carregar_logo_persistida()
 
-    # O seletor de relatório continua totalmente livre. Somente o uploader
-    # responsável por trocar a logo exige autenticação.
+    # O seletor do tipo de relatório permanece livre. Apenas a troca da logo
+    # passa pelo desbloqueio administrativo.
     if not _alteracao_logo_autorizada():
         return logo_atual
 
-    kwargs["help"] = "Selecione a nova logo da empresa. A alteração exige autorização administrativa."
+    kwargs["help"] = (
+        "Selecione a nova logo da empresa. A alteração está liberada "
+        "somente nesta sessão."
+    )
     resultado = _file_uploader_original(*args, **kwargs)
 
     if resultado is not None:
@@ -152,6 +198,9 @@ def _file_uploader_com_logo_persistente(*args, **kwargs):
     return logo_atual
 
 
-if not getattr(st.file_uploader, "_mrp_logo_persistente", False):
-    _file_uploader_com_logo_persistente._mrp_logo_persistente = True
-    st.file_uploader = _file_uploader_com_logo_persistente
+_file_uploader_com_logo_persistente._mrp_logo_persistente = True
+_file_uploader_com_logo_persistente._mrp_logo_wrapper_version = _WRAPPER_VERSION
+
+# Aplicação deliberadamente incondicional: versões anteriores usavam uma flag
+# genérica que podia manter o wrapper antigo carregado em memória após deploy.
+st.file_uploader = _file_uploader_com_logo_persistente
