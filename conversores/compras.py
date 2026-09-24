@@ -1,4 +1,6 @@
 import pandas as pd
+
+from conversores.semanas import semana_operacional
 from datetime import date, timedelta
 
 CC_ALVO = "600307"
@@ -37,47 +39,9 @@ def _numeros_unicos(valores):
     return ", ".join(vistos) if vistos else "0"
 
 
-def _domingo_da_semana(data_referencia):
-    primeiro_domingo = date(data_referencia.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-    if data_referencia < primeiro_domingo:
-        return None
-    return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
-
-
 def _semana_atendimento(valor, hoje=None):
-    """Retorna semana/período pela regra domingo-sábado.
-
-    Regra operacional:
-    - data anterior a hoje -> semana atual;
-    - data de hoje/futura -> semana da própria data;
-    - a data original nunca é alterada;
-    - datas futuras anteriores ao primeiro domingo do ano ficam sem semana.
-    """
-    if hoje is None:
-        hoje = date.today()
-    if pd.isna(valor) or _texto(valor) == "":
-        return "", ""
-
-    data_original = pd.Timestamp(valor).date()
-
-    if data_original < hoje:
-        data_calculo = hoje
-    else:
-        data_calculo = data_original
-
-    domingo = _domingo_da_semana(data_calculo)
-    if domingo is None:
-        return "", ""
-
-    primeiro_domingo = date(data_calculo.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-
-    semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
-    sabado = domingo + timedelta(days=6)
-    return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
+    """Usa ano + semana, mantendo domingo a sábado e o ajuste de datas vencidas."""
+    return semana_operacional(valor, hoje)
 
 
 def _adicionar_info_semanal(base, coluna_data, coluna_quantidade, prefixo):
@@ -90,7 +54,7 @@ def _adicionar_info_semanal(base, coluna_data, coluna_quantidade, prefixo):
     base[f"QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA {prefixo}"] = 0.0
     mask = (
         base[coluna_data].notna()
-        & base[f"SEMANA DE ATENDIMENTO {prefixo}"].str.match(r"^\d{2}$", na=False)
+        & base[f"SEMANA DE ATENDIMENTO {prefixo}"].str.match(r"^\d{4}-\d{2}$", na=False)
     )
     if mask.any():
         base.loc[mask, f"QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA {prefixo}"] = (
