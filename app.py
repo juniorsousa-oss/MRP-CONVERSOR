@@ -244,7 +244,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="app-info">Selecione o tipo de relatório no menu lateral, envie os arquivos brutos e gere a base tratada para utilização no MRP.</div>',
+    '<div class="app-info">Selecione o tipo de relatório no menu lateral, envie os arquivos brutos e gere a base tratada. As semanas são identificadas por ANO-SEMANA (ex.: 2026-52, 2027-02), respeitando domingo a sábado.</div>',
     unsafe_allow_html=True,
 )
 
@@ -274,7 +274,7 @@ if tipo_relatorio == "Relatório Geral":
         c3.metric("Linhas FOR-022", f"{len(for022_bruto):,}".replace(",", "."))
 
         st.subheader("2. Regras aplicadas")
-        st.info("FOR-001: OP → DATA MRP + CONDIÇÃO. NORMAL usa a DATA MRP para calcular a semana e entra na NECESSIDADE DA SEMANA. Condições diferentes de NORMAL permanecem visíveis no campo da semana, mas não entram no total. FOR-022: OP → DATA CM (coluna Separação); OP não encontrada = NI.")
+        st.info("FOR-001: OP → DATA MRP e CONDIÇÃO. A semana usa DATA MRP válida; na ausência, DATA CLIENTE; sem data ou com data vencida, utiliza a semana atual sem alterar a data original exibida. Todas as pendências entram na NECESSIDADE DA SEMANA, agrupadas por código + ano-semana. FOR-022: OP → DATA CM; sem correspondência = NI.")
 
         if st.button("Processar relatório", type="primary", use_container_width=True, key="processar_geral"):
             with st.spinner("Processando, vinculando PCP e validando..."):
@@ -461,7 +461,7 @@ else:
             "A coluna P (CÓDIGO UNIFICADO) faz a junção com H001 coluna F. "
             "A BOM vem de H001: H = MATERIAL, I = DESCRIÇÃO MATERIAL, L = QUANTIDADE. "
             "A DATA DE NECESSIDADE é DATA DE ENTREGA do PMP menos 30 dias. "
-            "A semana é domingo a sábado e a NECESSIDADE DA SEMANA é a soma do material para a mesma semana."
+            "A semana é domingo a sábado, identificada por ano-semana (AAAA-SS); a NECESSIDADE DA SEMANA soma os materiais da mesma semana e do mesmo ano."
         )
 
         if st.button("Processar MRP — TC/TP", type="primary", use_container_width=True, key="processar_tc_tp"):
