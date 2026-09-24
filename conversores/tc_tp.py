@@ -4,6 +4,8 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from conversores.semanas import semana_operacional
+
 
 def _texto(valor):
     if pd.isna(valor):
@@ -36,37 +38,9 @@ def _data(valor):
     return pd.to_datetime(valor, errors="coerce", dayfirst=True)
 
 
-def _domingo_da_semana(data_referencia):
-    primeiro_domingo = date(data_referencia.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-    if data_referencia < primeiro_domingo:
-        return None
-    return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
-
-
 def _semana(valor, hoje=None):
-    if hoje is None:
-        hoje = date.today()
-    if pd.isna(valor) or _texto(valor) == "":
-        return "", ""
-
-    data_original = pd.Timestamp(valor).date()
-    # A data original permanece no relatório. Apenas a semana é corrigida
-    # para nunca ficar anterior à semana atual.
-    data_calculo = hoje if data_original < hoje else data_original
-
-    domingo = _domingo_da_semana(data_calculo)
-    if domingo is None:
-        return "", ""
-
-    primeiro_domingo = date(data_calculo.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-
-    numero = ((domingo - primeiro_domingo).days // 7) + 1
-    sabado = domingo + timedelta(days=6)
-    return f"{numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
+    """Identifica a semana pelo ano do domingo inicial; datas vencidas vão à semana atual."""
+    return semana_operacional(valor, hoje)
 
 
 def _localizar_coluna(df, aliases, fallback_idx=None):
@@ -352,7 +326,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
 
     base["QUANTIDADE TOTAL PREVISTA ENTREGA NA SEMANA"] = 0.0
     mask_entrega = base["SEMANA DE ENTREGA"].astype(str).str.match(
-        r"^\d{2}$", na=False
+        r"^\d{4}-\d{2}$", na=False
     )
     entrega_unica = base.loc[
         mask_entrega,
@@ -389,7 +363,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
 
     base["NECESSIDADE TOTAL DA SEMANA"] = 0.0
     mask_necessidade = base["SEMANA DE NECESSIDADE"].astype(str).str.match(
-        r"^\d{2}$", na=False
+        r"^\d{4}-\d{2}$", na=False
     )
     mask_material_real = base["MATERIAL"].ne("00000000")
     mask_calculo = mask_necessidade & mask_material_real
