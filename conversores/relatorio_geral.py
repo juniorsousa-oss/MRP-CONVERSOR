@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from conversores.semanas import semana_operacional
+
 COLUNAS_OBRIGATORIAS = [
     "Projeto",
     "Código",
@@ -124,33 +126,9 @@ def _primeiro_texto(grupo: pd.Series) -> str:
     return ""
 
 
-def _domingo_da_semana(data_referencia: date) -> date:
-    return data_referencia - timedelta(days=(data_referencia.weekday() + 1) % 7)
-
-
 def _semana_operacional(valor: Any, hoje: date) -> tuple[str, str]:
-    """Calcula a semana operacional (domingo a sábado).
-
-    A DATA MRP exibida nunca é alterada. Somente a semana é corrigida:
-    datas anteriores a hoje e registros sem data são posicionados na semana atual.
-    """
-    if pd.isna(valor):
-        data_calculo = hoje
-    else:
-        data_original = pd.Timestamp(valor).date()
-        data_calculo = hoje if data_original < hoje else data_original
-
-    primeiro_domingo = date(data_calculo.year, 1, 1)
-    while primeiro_domingo.weekday() != 6:
-        primeiro_domingo += timedelta(days=1)
-
-    domingo = _domingo_da_semana(data_calculo)
-    if domingo < primeiro_domingo:
-        domingo = primeiro_domingo
-
-    semana_numero = ((domingo - primeiro_domingo).days // 7) + 1
-    sabado = domingo + timedelta(days=6)
-    return f"{semana_numero:02d}", f"{domingo:%d/%m/%Y} a {sabado:%d/%m/%Y}"
+    """Retorna ano-semana operacional, sem alterar a data original."""
+    return semana_operacional(valor, hoje, sem_data_usa_hoje=True)
 
 
 def _indice_coluna_por_cabecalho(df: pd.DataFrame, termos: list[str]) -> int | None:
@@ -525,7 +503,7 @@ def processar_relatorio_geral(
                 "Projeto válido": bool(re.fullmatch(r"\d{11}", str(grupo.iloc[0]["Projeto"]))),
                 "Código válido": bool(re.fullmatch(r"\d{8}", str(grupo.iloc[0]["Código"]))),
                 "Pendência recalculada": True,
-                "Semana atribuída": bool(re.fullmatch(r"\d{2}", str(grupo.iloc[0]["SEMANA DE NECESSIDADE"]))),
+                "Semana atribuída": bool(re.fullmatch(r"\d{4}-\d{2}", str(grupo.iloc[0]["SEMANA DE NECESSIDADE"]))),
             }
         )
     validacao = pd.DataFrame(validacoes)
@@ -536,7 +514,7 @@ def processar_relatorio_geral(
 
     sem_semana = int((~validacao["Semana atribuída"]).sum())
     if sem_semana:
-        erros.append(f"{sem_semana} linha(s) ficaram sem semana numérica após o tratamento.")
+        erros.append(f"{sem_semana} linha(s) ficaram sem ano-semana válido após o tratamento.")
 
     metricas = {
         "linhas_brutas": len(bruto),
