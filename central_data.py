@@ -262,7 +262,7 @@ def pipeline_finish(
         pass
 
 
-def load_visual_config(app_key: str = "mrp_conversor") -> dict:
+def load_visual_config(app_key: str = "setta_global") -> dict:
     try:
         row = api_call(
             "visual_get",
@@ -286,7 +286,7 @@ def load_visual_config(app_key: str = "mrp_conversor") -> dict:
 
 def save_visual_config(
     *,
-    app_key: str = "mrp_conversor",
+    app_key: str = "setta_global",
     logo_data: str = "",
     logo_mime: str = "image/png",
     favicon_data: str = "",
