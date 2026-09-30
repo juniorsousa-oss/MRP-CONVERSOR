@@ -16,6 +16,9 @@ DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
 EDGE_URL = f"{DEFAULT_SUPABASE_URL}/functions/v1/setta-data-api"
 BUCKET = "setta-data"
 
+SESSION = requests.Session()
+SESSION.headers.update({"Connection": "keep-alive"})
+
 
 def _secret(*names: str) -> str:
     candidates: list[Any] = []
@@ -66,7 +69,7 @@ def _headers() -> dict[str, str]:
 
 
 def api_call(action: str, payload: dict | None = None, timeout: int = 60) -> dict:
-    response = requests.post(
+    response = SESSION.post(
         api_url(),
         headers=_headers(),
         json={"action": action, "payload": payload or {}},
@@ -80,6 +83,32 @@ def api_call(action: str, payload: dict | None = None, timeout: int = 60) -> dic
     if not response.ok or not data.get("ok"):
         raise RuntimeError(data.get("error") or f"HTTP {response.status_code}")
     return data
+
+
+def pipeline_state(
+    source_keys: list[str],
+    derived_key: str,
+) -> tuple[dict[str, dict], dict]:
+    payload = api_call(
+        "pipeline_state",
+        {
+            "source_keys": source_keys,
+            "derived_key": derived_key,
+        },
+        timeout=30,
+    ).get("data") or {}
+
+    source_rows = payload.get("sources") or []
+    sources = {
+        str(row.get("source_key")): row
+        for row in source_rows
+        if isinstance(row, dict)
+    }
+    derived = payload.get("derived") or {
+        "base_key": derived_key,
+        "available": False,
+    }
+    return sources, derived
 
 
 def source_status(keys: list[str]) -> dict[str, dict]:
@@ -109,7 +138,7 @@ def download_source(source_key: str, timeout: int = 120) -> tuple[io.BytesIO, di
     if not signed_url:
         raise RuntimeError(f"Fonte {source_key} sem URL de leitura.")
 
-    response = requests.get(signed_url, timeout=timeout)
+    response = SESSION.get(signed_url, timeout=timeout)
     response.raise_for_status()
     buffer = io.BytesIO(response.content)
     buffer.name = str(meta.get("last_file_name") or source_key)
@@ -262,6 +291,7 @@ def pipeline_finish(
         pass
 
 
+@st.cache_data(show_spinner=False, ttl=60)
 def load_visual_config(app_key: str = "setta_global") -> dict:
     try:
         row = api_call(
