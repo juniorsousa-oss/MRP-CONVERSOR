@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from PIL import Image
 from streamlit_autorefresh import st_autorefresh
 
 import central_data as central
@@ -15,15 +16,40 @@ ROOT = Path(__file__).parent
 FAVICON = ROOT / "favicon.png.png"
 CONFIG_LOGO = ROOT / "config" / "logo_setta.svg"
 
+VISUAL_CONFIG = central.load_visual_config("mrp_conversor")
+
+
+def browser_icon():
+    data = str(VISUAL_CONFIG.get("favicon_data") or "").strip()
+    try:
+        if data:
+            raw = base64.b64decode(data, validate=True)
+            image = Image.open(io.BytesIO(raw))
+            image.load()
+            return image
+        if FAVICON.exists():
+            return str(FAVICON)
+    except Exception:
+        pass
+    return "📊"
+
+
 st.set_page_config(
     page_title="CONVERSOR MRP | SETTA",
-    page_icon=str(FAVICON),
+    page_icon=browser_icon(),
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 
 def load_logo():
+    data = str(VISUAL_CONFIG.get("logo_data") or "").strip()
+    mime = str(VISUAL_CONFIG.get("logo_mime") or "image/png")
+    if data:
+        try:
+            return base64.b64decode(data, validate=True), mime
+        except Exception:
+            pass
     try:
         return CONFIG_LOGO.read_bytes(), "image/svg+xml"
     except OSError:
@@ -60,11 +86,19 @@ st.markdown(
     .block-container{max-width:1780px!important;padding-top:3.2rem!important;padding-left:2.7rem!important;padding-right:2.7rem!important;padding-bottom:3rem!important;width:100%!important}
     section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important}
     section[data-testid="stSidebar"] .block-container{padding-top:1.6rem!important;padding-left:1rem!important;padding-right:1rem!important}
+    [data-testid="stAppViewContainer"] > .main,
+    [data-testid="stAppViewContainer"] .main,
+    [data-testid="stMain"],
+    .stMain{width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important}
+    [data-testid="stAppViewContainer"] .main .block-container,
+    [data-testid="stMain"] .block-container,
+    .stMain .block-container{width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important}
+    section[data-testid="stSidebar"][aria-expanded="false"]{width:0!important;min-width:0!important;max-width:0!important;flex-basis:0!important}
 
     .setta-logo-card{width:100%;min-height:128px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e5e8ee;border-radius:16px;box-shadow:0 4px 14px rgba(24,39,75,.08);box-sizing:border-box;margin:0 0 2.55rem 0;padding:1.1rem 2rem}
     .setta-logo-card img{display:block;width:auto;height:auto;max-width:205px;max-height:86px;object-fit:contain}
     .app-title{margin:0!important;padding:0!important;font-size:2.55rem!important;line-height:1.08!important;font-weight:800!important;letter-spacing:-.04em!important;color:#050505!important}
-    .app-sub{margin-top:.72rem!important;margin-bottom:1.45rem!important;color:#4f5661!important;font-size:.94rem!important}
+    .app-sub{margin-top:.72rem!important;margin-bottom:1.65rem!important;color:#4f5661!important;font-size:.94rem!important;line-height:1.35!important}
 
     .section-band{margin:1.15rem 0 .85rem;padding:.78rem 1rem;background:#fff;border:1px solid #e5e8ee;border-left:5px solid #111827;border-radius:12px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
     .section-kicker{font-size:.64rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#ef4444;margin-bottom:.14rem}
@@ -116,15 +150,86 @@ with st.sidebar:
     )
 
     st.divider()
-    with st.expander("IDENTIDADE VISUAL", expanded=False):
+    with st.expander("PERSONALIZAÇÃO", expanded=False):
+        if logo_bytes:
+            preview_b64 = base64.b64encode(logo_bytes).decode("ascii")
+            st.markdown(
+                '<div style="display:flex;justify-content:center;align-items:center;'
+                'min-height:82px;background:#fff;border:1px dashed #d1d5db;'
+                'border-radius:10px;padding:.65rem;margin:.4rem 0 .6rem">'
+                f'<img src="data:{logo_mime};base64,{preview_b64}" '
+                'style="max-width:140px;max-height:62px;object-fit:contain">'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
         logo_upload = st.file_uploader(
-            "Logo",
-            type=["png", "jpg", "jpeg", "svg"],
+            "Logo do cabeçalho",
+            type=["png", "jpg", "jpeg", "webp", "svg"],
             key="logo_empresa",
         )
-        if logo_upload is not None:
-            logo_bytes = logo_upload.getvalue()
-            logo_mime = logo_upload.type or "image/png"
+        favicon_upload = st.file_uploader(
+            "Ícone do navegador",
+            type=["png", "jpg", "jpeg", "ico"],
+            key="favicon_empresa",
+        )
+
+        save_col, reset_col = st.columns(2)
+        if save_col.button(
+            "SALVAR",
+            type="primary",
+            use_container_width=True,
+            key="save_visual_conversor",
+        ):
+            try:
+                current = dict(VISUAL_CONFIG)
+                if logo_upload is not None:
+                    raw_logo = logo_upload.getvalue()
+                    if len(raw_logo) > 2 * 1024 * 1024:
+                        raise ValueError("A logo deve ter no máximo 2 MB.")
+                    current["logo_data"] = base64.b64encode(raw_logo).decode()
+                    current["logo_mime"] = logo_upload.type or "image/png"
+
+                if favicon_upload is not None:
+                    raw_icon = favicon_upload.getvalue()
+                    if len(raw_icon) > 1 * 1024 * 1024:
+                        raise ValueError("O ícone deve ter no máximo 1 MB.")
+                    image = Image.open(io.BytesIO(raw_icon))
+                    image.verify()
+                    current["favicon_data"] = base64.b64encode(raw_icon).decode()
+                    current["favicon_mime"] = favicon_upload.type or "image/png"
+
+                if logo_upload is None and favicon_upload is None:
+                    st.warning("Selecione a logo ou o ícone.")
+                else:
+                    central.save_visual_config(
+                        app_key="mrp_conversor",
+                        logo_data=str(current.get("logo_data") or ""),
+                        logo_mime=str(current.get("logo_mime") or "image/png"),
+                        favicon_data=str(current.get("favicon_data") or ""),
+                        favicon_mime=str(current.get("favicon_mime") or "image/png"),
+                    )
+                    st.success("Identidade visual salva.")
+                    st.rerun()
+            except Exception as exc:
+                st.error(f"Não foi possível salvar: {exc}")
+
+        if reset_col.button(
+            "PADRÃO",
+            use_container_width=True,
+            key="reset_visual_conversor",
+        ):
+            try:
+                central.save_visual_config(
+                    app_key="mrp_conversor",
+                    logo_data="",
+                    logo_mime="image/png",
+                    favicon_data="",
+                    favicon_mime="image/png",
+                )
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Não foi possível restaurar: {exc}")
 
     st.caption("Central de Dados · atualização automática")
 
@@ -143,7 +248,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="app-sub">Central de Dados • Conversão • Validação</div>',
+    '<p class="app-sub">Central de Dados • Conversão • Validação</p>',
     unsafe_allow_html=True,
 )
 
