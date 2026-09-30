@@ -16,7 +16,7 @@ ROOT = Path(__file__).parent
 FAVICON = ROOT / "favicon.png.png"
 CONFIG_LOGO = ROOT / "config" / "logo_setta.svg"
 
-VISUAL_CONFIG = central.load_visual_config("mrp_conversor")
+VISUAL_CONFIG = central.load_visual_config("setta_global")
 
 
 def browser_icon():
@@ -86,6 +86,19 @@ st.markdown(
     .block-container{max-width:1780px!important;padding-top:3.2rem!important;padding-left:2.7rem!important;padding-right:2.7rem!important;padding-bottom:3rem!important;width:100%!important}
     section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important}
     section[data-testid="stSidebar"] .block-container{padding-top:1.6rem!important;padding-left:1rem!important;padding-right:1rem!important}
+    .sidebar-brand{background:#f8fafc;border:1px solid #e5e8ee;border-radius:12px;padding:.9rem 1rem;margin:0 0 1.05rem 0}
+    .sidebar-brand-title{font-size:.92rem;font-weight:800;color:#111827;letter-spacing:-.01em}
+    .sidebar-brand-sub{margin-top:.18rem;font-size:.75rem;color:#6b7280}
+    .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
+    .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
+    section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;gap:.34rem}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label{position:relative;width:100%;min-height:42px;display:flex!important;align-items:center!important;padding:.56rem .72rem .56rem .88rem!important;margin:0!important;border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;cursor:pointer;box-sizing:border-box}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label>div:first-child{position:absolute!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important;text-transform:uppercase!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked)::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p{color:#fff!important;font-weight:700!important}
     [data-testid="stAppViewContainer"] > .main,
     [data-testid="stAppViewContainer"] .main,
     [data-testid="stMain"],
@@ -136,6 +149,13 @@ st.markdown(
 
 logo_bytes, logo_mime = load_logo()
 
+NAV_OPTIONS = {
+    "RELATÓRIO GERAL": "Relatório Geral",
+    "SALDO EM ESTOQUE": "Saldo em Estoque",
+    "COMPRAS": "Compras — S.C + P.C + Pré-nota",
+    "MRP — TC/TP": "MRP — TC/TP",
+}
+
 with st.sidebar:
     st_autorefresh(
         interval=60_000,
@@ -143,95 +163,30 @@ with st.sidebar:
         key="mrp_conversor_central_refresh",
     )
 
-    st.markdown("### CONVERSOR MRP")
-    tipo_relatorio = st.selectbox(
-        "Base tratada",
-        list(pipelines.PIPELINES.keys()),
+    st.markdown(
+        '<div class="sidebar-brand">'
+        '<div class="sidebar-brand-title">CONVERSOR MRP</div>'
+        '<div class="sidebar-brand-sub">Central de Dados SETTA</div>'
+        '</div>'
+        '<div class="sidebar-section-label">NAVEGAÇÃO</div>',
+        unsafe_allow_html=True,
     )
 
-    st.divider()
-    with st.expander("PERSONALIZAÇÃO", expanded=False):
-        if logo_bytes:
-            preview_b64 = base64.b64encode(logo_bytes).decode("ascii")
-            st.markdown(
-                '<div style="display:flex;justify-content:center;align-items:center;'
-                'min-height:82px;background:#fff;border:1px dashed #d1d5db;'
-                'border-radius:10px;padding:.65rem;margin:.4rem 0 .6rem">'
-                f'<img src="data:{logo_mime};base64,{preview_b64}" '
-                'style="max-width:140px;max-height:62px;object-fit:contain">'
-                '</div>',
-                unsafe_allow_html=True,
-            )
+    selected_nav = st.radio(
+        "NAVEGAÇÃO",
+        list(NAV_OPTIONS.keys()),
+        label_visibility="collapsed",
+    )
+    tipo_relatorio = NAV_OPTIONS[selected_nav]
 
-        logo_upload = st.file_uploader(
-            "Logo do cabeçalho",
-            type=["png", "jpg", "jpeg", "webp", "svg"],
-            key="logo_empresa",
-        )
-        favicon_upload = st.file_uploader(
-            "Ícone do navegador",
-            type=["png", "jpg", "jpeg", "ico"],
-            key="favicon_empresa",
-        )
-
-        save_col, reset_col = st.columns(2)
-        if save_col.button(
-            "SALVAR",
-            type="primary",
-            use_container_width=True,
-            key="save_visual_conversor",
-        ):
-            try:
-                current = dict(VISUAL_CONFIG)
-                if logo_upload is not None:
-                    raw_logo = logo_upload.getvalue()
-                    if len(raw_logo) > 2 * 1024 * 1024:
-                        raise ValueError("A logo deve ter no máximo 2 MB.")
-                    current["logo_data"] = base64.b64encode(raw_logo).decode()
-                    current["logo_mime"] = logo_upload.type or "image/png"
-
-                if favicon_upload is not None:
-                    raw_icon = favicon_upload.getvalue()
-                    if len(raw_icon) > 1 * 1024 * 1024:
-                        raise ValueError("O ícone deve ter no máximo 1 MB.")
-                    image = Image.open(io.BytesIO(raw_icon))
-                    image.verify()
-                    current["favicon_data"] = base64.b64encode(raw_icon).decode()
-                    current["favicon_mime"] = favicon_upload.type or "image/png"
-
-                if logo_upload is None and favicon_upload is None:
-                    st.warning("Selecione a logo ou o ícone.")
-                else:
-                    central.save_visual_config(
-                        app_key="mrp_conversor",
-                        logo_data=str(current.get("logo_data") or ""),
-                        logo_mime=str(current.get("logo_mime") or "image/png"),
-                        favicon_data=str(current.get("favicon_data") or ""),
-                        favicon_mime=str(current.get("favicon_mime") or "image/png"),
-                    )
-                    st.success("Identidade visual salva.")
-                    st.rerun()
-            except Exception as exc:
-                st.error(f"Não foi possível salvar: {exc}")
-
-        if reset_col.button(
-            "PADRÃO",
-            use_container_width=True,
-            key="reset_visual_conversor",
-        ):
-            try:
-                central.save_visual_config(
-                    app_key="mrp_conversor",
-                    logo_data="",
-                    logo_mime="image/png",
-                    favicon_data="",
-                    favicon_mime="image/png",
-                )
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Não foi possível restaurar: {exc}")
-
-    st.caption("Central de Dados · atualização automática")
+    st.markdown("---")
+    st.markdown(
+        '<div class="sidebar-info-card">'
+        '<b>CENTRAL DE DADOS</b><br>'
+        'ATUALIZAÇÃO AUTOMÁTICA · 60 S'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 if logo_bytes:
     logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
