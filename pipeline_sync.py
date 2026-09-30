@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import streamlit as st
 
 import central_data as central
 from conversores.compras import processar_compras
@@ -232,13 +233,58 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
         }
 
 
-def current_frame(report_type: str) -> tuple[pd.DataFrame | None, dict]:
-    cfg = config_for(report_type)
+@st.cache_data(show_spinner=False, ttl=3600)
+def _cached_current_frame(
+    base_key: str,
+    processed_at: str,
+    source_versions_token: str,
+) -> tuple[pd.DataFrame | None, dict]:
     try:
-        frame, meta = central.download_derived(cfg["derived_key"])
-        return frame, meta
+        return central.download_derived(base_key)
     except Exception:
         return None, {}
+
+
+def current_frame(
+    report_type: str,
+    derived_meta: dict | None = None,
+) -> tuple[pd.DataFrame | None, dict]:
+    cfg = config_for(report_type)
+    meta = derived_meta or {}
+
+    processed_at = str(meta.get("processed_at") or "")
+    versions = meta.get("source_versions") or {}
+    token = json.dumps(
+        versions,
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+
+    if not processed_at and not token:
+        try:
+            status = central.derived_status([cfg["derived_key"]])
+            meta = status.get(cfg["derived_key"]) or {}
+            processed_at = str(meta.get("processed_at") or "")
+            versions = meta.get("source_versions") or {}
+            token = json.dumps(
+                versions,
+                sort_keys=True,
+                ensure_ascii=False,
+                default=str,
+            )
+        except Exception:
+            return None, {}
+
+    return _cached_current_frame(
+        cfg["derived_key"],
+        processed_at,
+        token,
+    )
+
+
+def clear_current_frame_cache() -> None:
+    _cached_current_frame.clear()
 
 
 def source_label(report_type: str, source_key: str) -> str:
