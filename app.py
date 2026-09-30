@@ -269,10 +269,17 @@ elif sync_status == "AGUARDANDO":
     st.warning("Aguardando: " + " • ".join(missing))
 
 result = sync.get("result")
-current, derived_meta = pipelines.current_frame(tipo_relatorio)
+derived_meta = sync.get("derived") or {}
 
-if current is None and result and isinstance(result.get("tratado"), pd.DataFrame):
+if result and isinstance(result.get("tratado"), pd.DataFrame):
     current = result["tratado"]
+else:
+    current, downloaded_meta = pipelines.current_frame(
+        tipo_relatorio,
+        derived_meta=derived_meta,
+    )
+    if downloaded_meta:
+        derived_meta = downloaded_meta
 
 st.markdown('<div class="topic-divider"></div>', unsafe_allow_html=True)
 st.markdown(
@@ -343,6 +350,7 @@ with st.expander("CONTINGÊNCIA", expanded=False):
         with st.spinner("Reprocessando..."):
             forced = pipelines.sync_pipeline(tipo_relatorio, force=True)
         if forced.get("sync_status") == "PROCESSADO":
+            pipelines.clear_current_frame_cache()
             st.success("Base reprocessada.")
             st.rerun()
         else:
