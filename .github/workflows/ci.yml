@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile Python
+        run: python -m py_compile app.py central_data.py pipeline_sync.py conversores/*.py
+      - name: Serialization smoke test
+        run: |
+          python - <<'PY'
+          import gzip
+          import io
+          import pandas as pd
+          import central_data
+
+          frame = pd.DataFrame({"codigo": ["001", "002"], "saldo": [1.5, 2.0]})
+          raw = central_data.dataframe_payload(frame)
+          restored = pd.read_json(io.BytesIO(gzip.decompress(raw)), orient="table")
+          assert len(restored) == 2
+          assert list(restored.columns) == ["codigo", "saldo"]
+          print("ok")
+          PY
