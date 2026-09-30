@@ -168,7 +168,7 @@ st.markdown(
     .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
     .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
     .sidebar-nav{display:flex;flex-direction:column;gap:.34rem;width:100%}
-    .sidebar-nav-item{position:relative;width:100%;min-height:42px;display:flex;align-items:center;padding:.56rem .72rem .56rem calc(.88rem + 7px);margin:0;border:1px solid transparent;border-radius:10px;background:transparent;box-sizing:border-box;text-decoration:none!important;color:#374151!important;font-size:.83rem;font-weight:600;line-height:1.2;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease}
+    .sidebar-nav-item{position:relative;width:100%;min-height:42px;display:flex;align-items:center;padding:.56rem .72rem .56rem calc(.88rem + 10px);margin:0;border:1px solid transparent;border-radius:10px;background:transparent;box-sizing:border-box;text-decoration:none!important;color:#374151!important;font-size:.83rem;font-weight:600;line-height:1.2;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease}
     .sidebar-nav-item:hover{background:#f8fafc;border-color:#e5e7eb;transform:translateX(1px);color:#111827!important}
     .sidebar-nav-item.active{background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important;color:#fff!important;font-weight:700}
     .sidebar-nav-item.active::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
