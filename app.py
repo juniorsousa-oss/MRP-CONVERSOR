@@ -167,32 +167,17 @@ st.markdown(
     .sidebar-brand-sub{margin-top:.18rem;font-size:.75rem;color:#6b7280}
     .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
     .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
+    .sidebar-nav{display:flex;flex-direction:column;gap:.34rem;width:100%}
+    .sidebar-nav-item{position:relative;width:100%;min-height:42px;display:flex;align-items:center;padding:.56rem .72rem .56rem .88rem;margin:0;border:1px solid transparent;border-radius:10px;background:transparent;box-sizing:border-box;text-decoration:none!important;color:#374151!important;font-size:.83rem;font-weight:600;line-height:1.2;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease}
+    .sidebar-nav-item:hover{background:#f8fafc;border-color:#e5e7eb;transform:translateX(1px);color:#111827!important}
+    .sidebar-nav-item.active{background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important;color:#fff!important;font-weight:700}
+    .sidebar-nav-item.active::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
     .sidebar-status-spacer{height:.6rem!important;min-height:.6rem!important}
     .sidebar-status-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.72rem;line-height:1.5}
     .sidebar-status-name{font-size:.68rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.025em}
     .sidebar-status-value{margin-top:.16rem;font-size:.8rem;font-weight:900;color:#111827;text-transform:uppercase}
     .sidebar-status-meta{margin-top:.24rem;color:#6b7280;font-size:.66rem;line-height:1.45;text-transform:uppercase}
     section[data-testid="stSidebar"] hr{margin:.85rem 0!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;gap:.34rem}
-    section[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"],
-    section[data-testid="stSidebar"] div[role="radiogroup"] [data-testid="stMarkdownContainer"] + div{position:absolute!important;opacity:0!important;pointer-events:none!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label{position:relative;width:100%;min-height:42px;display:flex!important;align-items:center!important;padding:.56rem .72rem .56rem .88rem!important;margin:0!important;border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease;box-sizing:border-box}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label>div:first-child{display:none!important;position:absolute!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label div:has(input[type="radio"]){display:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label input[type="radio"]{display:none!important;appearance:none!important;-webkit-appearance:none!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label svg{display:none!important}
-    /* Remove definitivamente o indicador circular nativo do BaseWeb/Streamlit. */
-    section[data-testid="stSidebar"] label[data-baseweb="radio"] input[type="radio"]{display:none!important;visibility:hidden!important;width:0!important;height:0!important;margin:0!important;padding:0!important}
-    section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child{display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important}
-    section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child *{display:none!important;visibility:hidden!important}
-    section[data-testid="stSidebar"] label[data-baseweb="radio"] [data-baseweb="radio"]{display:none!important;visibility:hidden!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]) > div:has(input[type="radio"]){display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]){padding-left:.88rem!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important;transform:translateX(1px)}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked)::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p{color:#fff!important;font-weight:700!important}
     [data-testid="stAppViewContainer"] > .main,
     [data-testid="stAppViewContainer"] .main,
     [data-testid="stMain"],
@@ -253,12 +238,36 @@ st.markdown(
 logo_bytes, logo_mime = load_logo()
 
 NAV_OPTIONS = {
-    "RELATÓRIO GERAL": "Relatório Geral",
-    "SALDO EM ESTOQUE": "Saldo em Estoque",
-    "COMPRAS": "Compras — S.C + P.C + Pré-nota",
-    "MRP — TC/TP": "MRP — TC/TP",
-    "CONFIGURAÇÕES": None,
+    "relatorio-geral": ("RELATÓRIO GERAL", "Relatório Geral"),
+    "saldo-em-estoque": ("SALDO EM ESTOQUE", "Saldo em Estoque"),
+    "compras": ("COMPRAS", "Compras — S.C + P.C + Pré-nota"),
+    "mrp-tctp": ("MRP — TC/TP", "MRP — TC/TP"),
+    "configuracoes": ("CONFIGURAÇÕES", None),
 }
+
+
+def current_nav_key() -> str:
+    try:
+        value = st.query_params.get("nav", "relatorio-geral")
+    except Exception:
+        value = "relatorio-geral"
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else "relatorio-geral"
+    value = str(value or "relatorio-geral").strip()
+    return value if value in NAV_OPTIONS else "relatorio-geral"
+
+
+def sidebar_nav_html(active_key: str) -> str:
+    items = []
+    for key, (label, _) in NAV_OPTIONS.items():
+        active = " active" if key == active_key else ""
+        items.append(
+            f'<a class="sidebar-nav-item{active}" href="?nav={key}" target="_self">'
+            f'{label}'
+            '</a>'
+        )
+    return '<div class="sidebar-nav">' + "".join(items) + "</div>"
+
 
 
 with st.sidebar:
@@ -277,12 +286,12 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    selected_nav = st.radio(
-        "Página",
-        list(NAV_OPTIONS.keys()),
-        label_visibility="collapsed",
+    _nav_key = current_nav_key()
+    selected_nav, tipo_relatorio = NAV_OPTIONS[_nav_key]
+    st.markdown(
+        sidebar_nav_html(_nav_key),
+        unsafe_allow_html=True,
     )
-    tipo_relatorio = NAV_OPTIONS[selected_nav]
 
     st.divider()
     st.markdown(
