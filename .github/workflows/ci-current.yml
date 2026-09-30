@@ -31,3 +31,31 @@ jobs:
           assert list(restored.columns) == ["codigo", "saldo"]
           print("ok")
           PY
+
+      - name: Signed upload bytes smoke test
+        run: |
+          python - <<'PY'
+          from supabase import create_client
+          import central_data
+
+          client = create_client(
+              central_data.supabase_url(),
+              central_data.supabase_key(),
+          )
+
+          try:
+              result = client.storage.from_("setta-data").upload_to_signed_url(
+                  path="diagnostics/bytes-test.bin",
+                  token="invalid-token-for-type-test",
+                  file=b"setta-upload-type-test",
+              )
+              print("SIGNED_UPLOAD_BYTES_ACCEPTED", result)
+          except TypeError as exc:
+              raise AssertionError(
+                  f"O cliente ainda rejeitou bytes: {exc}"
+              ) from exc
+          except Exception as exc:
+              # Token inválido é esperado. O objetivo é confirmar que o corpo
+              # em bytes passa pela camada de serialização sem TypeError.
+              print("SIGNED_UPLOAD_REACHED_HTTP_LAYER", type(exc).__name__, str(exc)[:200])
+          PY
