@@ -260,3 +260,52 @@ def pipeline_finish(
         )
     except Exception:
         pass
+
+
+def load_visual_config(app_key: str = "mrp_conversor") -> dict:
+    try:
+        row = api_call(
+            "visual_get",
+            {"app_key": app_key},
+            timeout=30,
+        ).get("data") or {}
+        return {
+            "logo_data": row.get("logo_data") or "",
+            "logo_mime": row.get("logo_mime") or "image/png",
+            "favicon_data": row.get("favicon_data") or "",
+            "favicon_mime": row.get("favicon_mime") or "image/png",
+        }
+    except Exception:
+        return {
+            "logo_data": "",
+            "logo_mime": "image/png",
+            "favicon_data": "",
+            "favicon_mime": "image/png",
+        }
+
+
+def save_visual_config(
+    *,
+    app_key: str = "mrp_conversor",
+    logo_data: str = "",
+    logo_mime: str = "image/png",
+    favicon_data: str = "",
+    favicon_mime: str = "image/png",
+) -> dict:
+    row = api_call(
+        "visual_set",
+        {
+            "app_key": app_key,
+            "logo_data": logo_data,
+            "logo_mime": logo_mime,
+            "favicon_data": favicon_data,
+            "favicon_mime": favicon_mime,
+        },
+        timeout=30,
+    ).get("data") or {}
+    return {
+        "logo_data": row.get("logo_data") or "",
+        "logo_mime": row.get("logo_mime") or "image/png",
+        "favicon_data": row.get("favicon_data") or "",
+        "favicon_mime": row.get("favicon_mime") or "image/png",
+    }
