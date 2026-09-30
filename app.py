@@ -70,6 +70,7 @@ def fmt_dt(value) -> str:
         return "—"
 
 
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=8)
 def excel_bytes(frame: pd.DataFrame, sheet_name: str) -> bytes:
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
