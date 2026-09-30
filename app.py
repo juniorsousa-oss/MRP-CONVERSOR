@@ -116,6 +116,7 @@ st.markdown(
     .section-band{margin:1.15rem 0 .85rem;padding:.78rem 1rem;background:#fff;border:1px solid #e5e8ee;border-left:5px solid #111827;border-radius:12px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
     .section-kicker{font-size:.64rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#ef4444;margin-bottom:.14rem}
     .section-title{font-size:1.03rem;font-weight:900;color:#111827;letter-spacing:-.012em;text-transform:uppercase}
+    .topic-divider{height:1px;background:#cbd5e1;margin:1.55rem 0 1.05rem;width:100%}
 
     .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.72rem;margin:.25rem 0 1rem}
     .source-card{position:relative;background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:.82rem .9rem;box-shadow:0 3px 12px rgba(15,23,42,.035);overflow:hidden;min-height:96px}
@@ -273,6 +274,7 @@ current, derived_meta = pipelines.current_frame(tipo_relatorio)
 if current is None and result and isinstance(result.get("tratado"), pd.DataFrame):
     current = result["tratado"]
 
+st.markdown('<div class="topic-divider"></div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="section-band">'
     '<div class="section-kicker">02 · RESULTADO</div>'
@@ -330,6 +332,7 @@ if current is not None:
 else:
     st.info("Base tratada ainda não disponível.")
 
+st.markdown('<div class="topic-divider"></div>', unsafe_allow_html=True)
 with st.expander("CONTINGÊNCIA", expanded=False):
     b1, b2 = st.columns(2)
     if b1.button(
