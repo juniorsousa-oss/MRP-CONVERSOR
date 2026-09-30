@@ -59,3 +59,17 @@ jobs:
               # em bytes passa pela camada de serialização sem TypeError.
               print("SIGNED_UPLOAD_REACHED_HTTP_LAYER", type(exc).__name__, str(exc)[:200])
           PY
+
+      - name: Pipeline state smoke test
+        run: |
+          python - <<'PY'
+          import central_data
+
+          sources, derived = central_data.pipeline_state(
+              ["relatorio_geral", "for001", "for022"],
+              "relatorio_geral_tratado",
+          )
+          assert set(sources) == {"relatorio_geral", "for001", "for022"}, sources
+          assert derived.get("base_key") == "relatorio_geral_tratado", derived
+          print("pipeline-state-ok")
+          PY
