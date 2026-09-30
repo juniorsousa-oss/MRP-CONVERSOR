@@ -181,6 +181,13 @@ st.markdown(
     section[data-testid="stSidebar"] div[role="radiogroup"] label div:has(input[type="radio"]){display:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label input[type="radio"]{display:none!important;appearance:none!important;-webkit-appearance:none!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label svg{display:none!important}
+    /* Remove definitivamente o indicador circular nativo do BaseWeb/Streamlit. */
+    section[data-testid="stSidebar"] label[data-baseweb="radio"] input[type="radio"]{display:none!important;visibility:hidden!important;width:0!important;height:0!important;margin:0!important;padding:0!important}
+    section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child{display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important}
+    section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child *{display:none!important;visibility:hidden!important}
+    section[data-testid="stSidebar"] label[data-baseweb="radio"] [data-baseweb="radio"]{display:none!important;visibility:hidden!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]) > div:has(input[type="radio"]){display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]){padding-left:.88rem!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important;transform:translateX(1px)}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important}
