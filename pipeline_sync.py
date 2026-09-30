@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
 from typing import Any
@@ -96,12 +97,10 @@ def config_for(report_type: str) -> dict:
 
 def get_state(report_type: str) -> dict:
     cfg = config_for(report_type)
-    source_status = central.source_status(cfg["sources"])
-    derived_status = central.derived_status([cfg["derived_key"]])
-    derived_meta = derived_status.get(cfg["derived_key"]) or {
-        "base_key": cfg["derived_key"],
-        "available": False,
-    }
+    source_status, derived_meta = central.pipeline_state(
+        cfg["sources"],
+        cfg["derived_key"],
+    )
     versions = central.source_versions(source_status, cfg["sources"])
     ready = central.all_sources_available(source_status, cfg["sources"])
     stale = ready and central.needs_reprocess(versions, derived_meta)
@@ -116,10 +115,19 @@ def get_state(report_type: str) -> dict:
 
 
 def _download_sources(cfg: dict) -> dict[str, io.BytesIO]:
+    keys = list(cfg["sources"])
     files: dict[str, io.BytesIO] = {}
-    for key in cfg["sources"]:
-        file_obj, _ = central.download_source(key)
-        files[key] = file_obj
+
+    with ThreadPoolExecutor(max_workers=min(4, len(keys))) as executor:
+        futures = {
+            executor.submit(central.download_source, key): key
+            for key in keys
+        }
+        for future in as_completed(futures):
+            key = futures[future]
+            file_obj, _ = future.result()
+            files[key] = file_obj
+
     return files
 
 
@@ -212,7 +220,14 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
             rows_count=len(treated),
         )
 
-        refreshed = get_state(report_type)
+        refreshed = {
+            **state,
+            "derived": {
+                **published,
+                "available": True,
+            },
+            "stale": False,
+        }
         return {
             **refreshed,
             "sync_status": "PROCESSADO",
