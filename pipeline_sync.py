@@ -183,7 +183,11 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
             central.pipeline_finish(
                 run_id,
                 "ERRO",
-                rows_count=int(len(result.get("tratado") or [])),
+                rows_count=int(
+                    len(result.get("tratado"))
+                    if isinstance(result.get("tratado"), pd.DataFrame)
+                    else 0
+                ),
                 message=" | ".join(str(item) for item in errors[:10]),
             )
             return {
