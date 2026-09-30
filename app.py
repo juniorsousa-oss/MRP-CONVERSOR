@@ -1,504 +1,341 @@
+from __future__ import annotations
+
 import base64
 import io
-import json
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
-from conversores.estoque import processar_estoque
-from conversores.relatorio_geral import processar_relatorio_geral
-from conversores.compras import processar_compras
-from conversores.tc_tp import processar_tc_tp
+import central_data as central
+import pipeline_sync as pipelines
 
-FAVICON = Path(__file__).parent / "favicon.png.png"
-CONFIG_ENDERECOS = Path(__file__).parent / "config" / "enderecos_nao_disponiveis.json"
-CONFIG_LOGO = Path(__file__).parent / "config" / "logo_setta.svg"
+ROOT = Path(__file__).parent
+FAVICON = ROOT / "favicon.png.png"
+CONFIG_LOGO = ROOT / "config" / "logo_setta.svg"
 
 st.set_page_config(
     page_title="CONVERSOR MRP | SETTA",
     page_icon=str(FAVICON),
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 
-def carregar_enderecos_nao_disponiveis():
-    try:
-        with CONFIG_ENDERECOS.open("r", encoding="utf-8") as arquivo:
-            dados = json.load(arquivo)
-        return [str(x).strip() for x in dados.get("enderecos_nao_disponiveis", []) if str(x).strip()]
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
-
-
-def carregar_logo_padrao():
+def load_logo():
     try:
         return CONFIG_LOGO.read_bytes(), "image/svg+xml"
     except OSError:
         return None, None
 
 
-def ler_excel_seguro(arquivo, **kwargs):
-    """Lê Excel normalmente e usa Calamine quando o openpyxl encontra
-    formatação/condicional inválida no arquivo de origem.
-    """
+def fmt_dt(value) -> str:
+    if not value:
+        return "—"
     try:
-        return pd.read_excel(arquivo, **kwargs)
-    except TypeError as exc:
-        if "MultiCellRange" not in str(exc):
-            raise
-        try:
-            arquivo.seek(0)
-        except (AttributeError, OSError):
-            pass
-        return pd.read_excel(arquivo, engine="calamine", **kwargs)
+        stamp = pd.to_datetime(value, errors="coerce")
+        if pd.isna(stamp):
+            return "—"
+        if getattr(stamp, "tzinfo", None) is not None:
+            stamp = stamp.tz_convert("America/Sao_Paulo")
+        return stamp.strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return "—"
 
 
-def ler_estoque_como_cabecalho(arquivo):
-    return ler_excel_seguro(arquivo, header=1)
-
-
-def ler_compras_como_cabecalho(arquivo, sheet_name=0):
-    return ler_excel_seguro(arquivo, sheet_name=sheet_name, header=1)
-
-
-def ler_for001(arquivo):
-    return ler_excel_seguro(arquivo, sheet_name="PAINEL", header=4)
-
-
-def ler_for022(arquivo):
-    return ler_excel_seguro(arquivo, sheet_name="Datas esperadas", header=0)
+def excel_bytes(frame: pd.DataFrame, sheet_name: str) -> bytes:
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        frame.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 st.markdown(
     """
     <style>
-    [data-testid="stAppViewContainer"] {
-        background: #f4f7fb;
-    }
+    [data-testid="stAppViewContainer"]{background:#f4f7fb!important}
+    [data-testid="stHeader"]{background:rgba(255,255,255,.96)!important}
+    .block-container{max-width:1780px!important;padding-top:3.2rem!important;padding-left:2.7rem!important;padding-right:2.7rem!important;padding-bottom:3rem!important;width:100%!important}
+    section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important}
+    section[data-testid="stSidebar"] .block-container{padding-top:1.6rem!important;padding-left:1rem!important;padding-right:1rem!important}
 
-    [data-testid="stHeader"] {
-        background: rgba(255, 255, 255, 0.96);
-    }
+    .setta-logo-card{width:100%;min-height:128px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e5e8ee;border-radius:16px;box-shadow:0 4px 14px rgba(24,39,75,.08);box-sizing:border-box;margin:0 0 2.55rem 0;padding:1.1rem 2rem}
+    .setta-logo-card img{display:block;width:auto;height:auto;max-width:205px;max-height:86px;object-fit:contain}
+    .app-title{margin:0!important;padding:0!important;font-size:2.55rem!important;line-height:1.08!important;font-weight:800!important;letter-spacing:-.04em!important;color:#050505!important}
+    .app-sub{margin-top:.72rem!important;margin-bottom:1.45rem!important;color:#4f5661!important;font-size:.94rem!important}
 
-    .block-container {
-        max-width: 1780px;
-        padding-top: 3.2rem;
-        padding-left: 2.7rem;
-        padding-right: 2.7rem;
-        padding-bottom: 3rem;
-    }
+    .section-band{margin:1.15rem 0 .85rem;padding:.78rem 1rem;background:#fff;border:1px solid #e5e8ee;border-left:5px solid #111827;border-radius:12px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
+    .section-kicker{font-size:.64rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#ef4444;margin-bottom:.14rem}
+    .section-title{font-size:1.03rem;font-weight:900;color:#111827;letter-spacing:-.012em;text-transform:uppercase}
 
-    .setta-logo-card {
-        width: 100%;
-        min-height: 128px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #ffffff;
-        border: 1px solid #e5e8ee;
-        border-radius: 16px;
-        box-shadow: 0 4px 14px rgba(24, 39, 75, 0.08);
-        box-sizing: border-box;
-        margin: 0 0 2.55rem 0;
-        padding: 1.1rem 2rem;
-    }
+    .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.72rem;margin:.25rem 0 1rem}
+    .source-card{position:relative;background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:.82rem .9rem;box-shadow:0 3px 12px rgba(15,23,42,.035);overflow:hidden;min-height:96px}
+    .source-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent,#64748b)}
+    .source-name{font-size:.69rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.035em}
+    .source-status{margin-top:.26rem;font-size:.88rem;font-weight:900;color:#111827}
+    .source-meta{margin-top:.28rem;font-size:.64rem;color:#94a3b8}
 
-    .setta-logo-card img {
-        display: block;
-        width: auto;
-        height: auto;
-        max-width: 205px;
-        max-height: 86px;
-        object-fit: contain;
-    }
+    .base-card{position:relative;background:#fff;border:1px solid #dfe3e8;border-radius:13px;padding:1rem 1.05rem;box-shadow:0 4px 14px rgba(15,23,42,.045);margin:.25rem 0 1rem}
+    .base-title{font-size:.79rem;font-weight:900;color:#111827;text-transform:uppercase}
+    .base-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin-top:.75rem}
+    .base-stat{background:#f8fafc;border:1px solid #edf0f3;border-radius:9px;padding:.58rem .65rem}
+    .base-label{font-size:.58rem;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em}
+    .base-value{margin-top:.18rem;font-size:.78rem;font-weight:900;color:#111827;overflow-wrap:anywhere}
 
-    .app-title {
-        margin: 0;
-        padding: 0;
-        font-size: 2.55rem;
-        line-height: 1.08;
-        font-weight: 800;
-        letter-spacing: -0.04em;
-        color: #050505;
-    }
+    div[data-testid="stMetric"]{background:#fff;border:1px solid #e7eaf0;border-radius:12px;padding:.8rem 1rem}
+    div[data-testid="stFileUploader"] section{border-radius:10px}
+    div.stButton>button[kind="primary"],div.stDownloadButton>button{border-radius:9px;font-weight:700}
+    .footer{text-align:center;color:#9298a1;font-size:.7rem;padding-top:1.4rem}
 
-    .app-subtitle {
-        margin-top: 0.72rem;
-        margin-bottom: 0;
-        font-size: 0.94rem;
-        color: #4f5661;
-    }
-
-    .app-info {
-        margin: 1.05rem 0 1.65rem 0;
-        padding: 1rem 1.05rem;
-        background: #dce8f9;
-        color: #1457b6;
-        border-radius: 9px;
-        font-size: 0.98rem;
-        line-height: 1.35;
-    }
-
-    section[data-testid="stSidebar"] {
-        background: #ffffff;
-        border-right: 1px solid #e8ebf0;
-    }
-
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 1.6rem;
-    }
-
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
-        color: #111111;
-    }
-
-    div[data-testid="stFileUploader"] section {
-        border-radius: 10px;
-    }
-
-    div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #e7eaf0;
-        border-radius: 12px;
-        padding: 0.8rem 1rem;
-    }
-
-    div.stButton > button[kind="primary"],
-    div.stDownloadButton > button {
-        border-radius: 9px;
-        font-weight: 600;
-    }
-
-    @media (max-width: 900px) {
-        .block-container {
-            padding-top: 2rem;
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
-        .setta-logo-card {
-            min-height: 105px;
-            margin-bottom: 1.8rem;
-        }
-        .setta-logo-card img {
-            max-width: 170px;
-            max-height: 72px;
-        }
-        .app-title {
-            font-size: 2rem;
-        }
+    @media(max-width:1000px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:900px){
+      .block-container{padding-top:2rem!important;padding-left:1rem!important;padding-right:1rem!important;padding-bottom:2rem!important}
+      .setta-logo-card{min-height:105px;margin-bottom:1.8rem;padding:.9rem 1rem}.setta-logo-card img{max-width:170px;max-height:72px}
+      .app-title{font-size:2rem!important}.source-grid,.base-meta{grid-template-columns:1fr!important}
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
-logo_bytes, logo_mime = carregar_logo_padrao()
+logo_bytes, logo_mime = load_logo()
 
 with st.sidebar:
-    st.header("Configuração")
+    st_autorefresh(
+        interval=60_000,
+        limit=None,
+        key="mrp_conversor_central_refresh",
+    )
+
+    st.markdown("### CONVERSOR MRP")
     tipo_relatorio = st.selectbox(
-        "Tipo de relatório",
-        [
-            "Relatório Geral",
-            "Saldo em Estoque",
-            "Compras — S.C + P.C + Pré-nota",
-            "MRP — TC/TP",
-        ],
+        "Base tratada",
+        list(pipelines.PIPELINES.keys()),
     )
 
     st.divider()
-    st.caption("Identidade visual")
-    logo_empresa = st.file_uploader(
-        "Alterar logo da empresa",
-        type=["png", "jpg", "jpeg", "svg"],
-        key="logo_empresa",
-        help="A imagem selecionada substitui a logo padrão apenas durante a sessão atual.",
-    )
-    if logo_empresa is not None:
-        logo_bytes = logo_empresa.getvalue()
-        logo_mime = logo_empresa.type or "image/png"
+    with st.expander("IDENTIDADE VISUAL", expanded=False):
+        logo_upload = st.file_uploader(
+            "Logo",
+            type=["png", "jpg", "jpeg", "svg"],
+            key="logo_empresa",
+        )
+        if logo_upload is not None:
+            logo_bytes = logo_upload.getvalue()
+            logo_mime = logo_upload.type or "image/png"
 
-    st.info(
-        "O conversor não calcula MRP. Ele transforma, agrupa, valida e exporta os dados para uso posterior."
-    )
-
+    st.caption("Central de Dados · atualização automática")
 
 if logo_bytes:
-    logo_base64 = base64.b64encode(logo_bytes).decode("ascii")
-    mime = logo_mime or "image/png"
-    logo_html = f'<img src="data:{mime};base64,{logo_base64}" alt="Setta">'
+    logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
+    logo_html = f'<img src="data:{logo_mime};base64,{logo_b64}" alt="SETTA">'
 else:
-    logo_html = '<div style="font-size:2rem;font-weight:800;color:#202124;">SETTA</div>'
+    logo_html = '<div style="font-size:2rem;font-weight:800;color:#202124">SETTA</div>'
 
 st.markdown(
     f'<div class="setta-logo-card">{logo_html}</div>',
     unsafe_allow_html=True,
 )
-st.markdown('<h1 class="app-title">CONVERSOR MRP | SETTA</h1>', unsafe_allow_html=True)
 st.markdown(
-    '<p class="app-subtitle">Conversão e validação de relatórios brutos do ERP para Excel tratado.</p>',
+    '<h1 class="app-title">CONVERSOR MRP | SETTA</h1>',
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="app-info">Selecione o tipo de relatório no menu lateral, envie os arquivos brutos e gere a base tratada. As semanas são identificadas por ANO-SEMANA (ex.: 2026-52, 2027-02), respeitando domingo a sábado.</div>',
+    '<div class="app-sub">Central de Dados • Conversão • Validação</div>',
     unsafe_allow_html=True,
 )
 
+cfg = pipelines.config_for(tipo_relatorio)
 
-if tipo_relatorio == "Relatório Geral":
-    st.subheader("1. Enviar os três relatórios brutos")
-    st.caption("O Relatório Geral recebe a DATA MRP e a condição do FOR-001 pela OP, e a DATA CM do FOR-022 pela OP.")
-    arquivo = st.file_uploader("Relatório Geral — aba 'Geral'", type=["xlsx", "xls", "xltx"], key="geral")
-    for001_arquivo = st.file_uploader("FOR-001 — Plano Mestre de Produção", type=["xlsx", "xls", "xltx"], key="for001")
-    for022_arquivo = st.file_uploader("FOR-022 — Planejamento Macro Produção", type=["xlsx", "xls", "xltx"], key="for022")
+try:
+    with st.spinner("Sincronizando com a Central de Dados..."):
+        sync = pipelines.sync_pipeline(tipo_relatorio)
+except Exception as exc:
+    sync = {
+        "config": cfg,
+        "sources": {},
+        "derived": {},
+        "versions": {},
+        "ready": False,
+        "stale": False,
+        "sync_status": "ERRO",
+        "result": None,
+        "error": str(exc),
+    }
 
-    if arquivo is not None and for001_arquivo is not None and for022_arquivo is not None:
-        try:
-            bruto = ler_excel_seguro(arquivo, sheet_name="Geral")
-            for001_bruto = ler_for001(for001_arquivo)
-            for022_bruto = ler_for022(for022_arquivo)
-        except ValueError as exc:
-            st.error(f"Não foi possível localizar a aba necessária nos arquivos: {exc}")
-            st.stop()
-        except Exception as exc:
-            st.error(f"Não foi possível ler os arquivos: {exc}")
-            st.stop()
+st.markdown(
+    '<div class="section-band">'
+    '<div class="section-kicker">01 · FONTES</div>'
+    '<div class="section-title">CENTRAL DE DADOS</div>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Linhas Relatório Geral", f"{len(bruto):,}".replace(",", "."))
-        c2.metric("OPs FOR-001", f"{len(for001_bruto):,}".replace(",", "."))
-        c3.metric("Linhas FOR-022", f"{len(for022_bruto):,}".replace(",", "."))
+source_cards = []
+for key in cfg["sources"]:
+    meta = (sync.get("sources") or {}).get(key) or {}
+    available = bool(meta.get("available"))
+    accent = "#22c55e" if available else "#f59e0b"
+    status_txt = "ATUALIZADO" if available else "AGUARDANDO"
+    version = int(meta.get("version") or 0)
+    source_cards.append(
+        '<div class="source-card" '
+        f'style="--accent:{accent}">'
+        f'<div class="source-name">{pipelines.source_label(tipo_relatorio, key)}</div>'
+        f'<div class="source-status">{status_txt}</div>'
+        f'<div class="source-meta">v{version} • {fmt_dt(meta.get("last_update_at"))}</div>'
+        '</div>'
+    )
 
-        st.subheader("2. Regras aplicadas")
-        st.info("FOR-001: OP → DATA MRP e CONDIÇÃO. A semana usa DATA MRP válida; na ausência, DATA CLIENTE; sem data ou com data vencida, utiliza a semana atual sem alterar a data original exibida. Todas as pendências entram na NECESSIDADE DA SEMANA, agrupadas por código + ano-semana. FOR-022: OP → DATA CM; sem correspondência = NI.")
+st.markdown(
+    '<div class="source-grid">' + "".join(source_cards) + "</div>",
+    unsafe_allow_html=True,
+)
 
-        if st.button("Processar relatório", type="primary", use_container_width=True, key="processar_geral"):
-            with st.spinner("Processando, vinculando PCP e validando..."):
-                st.session_state["resultado_geral"] = processar_relatorio_geral(bruto, for001_bruto, for022_bruto)
+sync_status = str(sync.get("sync_status") or "")
+if sync_status == "PROCESSADO":
+    st.success(f"{cfg['derived_name']} atualizada automaticamente.")
+elif sync_status == "ERRO":
+    st.error(sync.get("error") or "Falha no processamento.")
+elif sync_status == "AGUARDANDO":
+    missing = [
+        pipelines.source_label(tipo_relatorio, key)
+        for key in cfg["sources"]
+        if not bool(((sync.get("sources") or {}).get(key) or {}).get("available"))
+    ]
+    st.warning("Aguardando: " + " • ".join(missing))
 
-    if "resultado_geral" in st.session_state:
-        resultado = st.session_state["resultado_geral"]
-        st.subheader("3. Resultado da conversão")
-        metricas = resultado["metricas"]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Linhas brutas", f"{metricas['linhas_brutas']:,}".replace(",", "."))
-        c2.metric("Chaves únicas", f"{metricas['chaves_unicas']:,}".replace(",", "."))
-        c3.metric("Linhas agrupadas", f"{metricas['linhas_agrupadas']:,}".replace(",", "."))
-        c4.metric("Erros", str(metricas["erros"]))
-        if resultado["erros"]:
-            st.error("Foram encontradas inconsistências que precisam ser corrigidas antes da exportação.")
-            for erro in resultado["erros"]:
-                st.write(f"- {erro}")
-        else:
-            st.success("Validação concluída sem erros críticos.")
-        if resultado["avisos"]:
-            with st.expander(f"Avisos ({len(resultado['avisos'])})"):
-                for aviso in resultado["avisos"]:
-                    st.write(f"- {aviso}")
-        st.subheader("Prévia do relatório tratado")
-        st.dataframe(resultado["tratado"].head(100), use_container_width=True, height=420)
-        if not resultado["erros"]:
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                resultado["tratado"].to_excel(writer, sheet_name="RelatorioTratado", index=False)
-                resultado["validacao"].to_excel(writer, sheet_name="Validacao", index=False)
-            buffer.seek(0)
-            st.subheader("4. Exportar")
-            st.download_button("Baixar Excel tratado", data=buffer, file_name="RelatorioGeral_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_geral")
+result = sync.get("result")
+current, derived_meta = pipelines.current_frame(tipo_relatorio)
 
+if current is None and result and isinstance(result.get("tratado"), pd.DataFrame):
+    current = result["tratado"]
 
-elif tipo_relatorio == "Saldo em Estoque":
-    st.subheader("1. Enviar os dois relatórios brutos")
-    st.write("O Analítico é a base do saldo. O relatório de Endereço complementa o cálculo dos endereços não disponíveis.")
-    analitico_arquivo = st.file_uploader("Analítico — Cód. Produto, Descrição e Saldo em Estoque", type=["xlsx", "xls", "xltx"], key="analitico")
-    endereco_arquivo = st.file_uploader("Endereço — Cód. Produto, Endereço e Quantidade", type=["xlsx", "xls", "xltx"], key="endereco")
-    if analitico_arquivo is not None and endereco_arquivo is not None:
-        try:
-            analitico_bruto = ler_estoque_como_cabecalho(analitico_arquivo)
-            endereco_bruto = ler_estoque_como_cabecalho(endereco_arquivo)
-        except Exception as exc:
-            st.error(f"Não foi possível ler os relatórios: {exc}")
-            st.stop()
-        enderecos = sorted([x for x in endereco_bruto.iloc[:, 3].dropna().astype(str).str.strip().unique().tolist() if x])
-        st.subheader("2. Classificar endereços não disponíveis")
-        st.caption("Os endereços configurados permanentemente já vêm pré-selecionados.")
-        configurados = carregar_enderecos_nao_disponiveis()
-        selecionados = st.multiselect("Endereços considerados NÃO DISPONÍVEIS", options=enderecos, default=[x for x in configurados if x in enderecos], key="enderecos_nao_disponiveis")
-        c1, c2 = st.columns(2)
-        c1.metric("Linhas do Analítico", f"{len(analitico_bruto):,}".replace(",", "."))
-        c2.metric("Linhas do Endereço", f"{len(endereco_bruto):,}".replace(",", "."))
-        if st.button("Processar saldo em estoque", type="primary", use_container_width=True, key="processar_estoque"):
-            with st.spinner("Consolidando estoque e validando..."):
-                st.session_state["resultado_estoque"] = processar_estoque(analitico_bruto, endereco_bruto, selecionados)
-    if "resultado_estoque" in st.session_state:
-        resultado = st.session_state["resultado_estoque"]
-        st.subheader("3. Resultado da conversão")
-        metricas = resultado["metricas"]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Produtos no Analítico", f"{metricas['produtos_analitico']:,}".replace(",", "."))
-        c2.metric("Produtos no Endereço", f"{metricas['produtos_endereco']:,}".replace(",", "."))
-        c3.metric("Inconsistências", str(metricas["inconsistencias"]))
-        c4.metric("Erros estruturais", str(metricas["erros"]))
-        if resultado["erros"]:
-            st.error("Foram encontradas falhas estruturais. O arquivo não deve ser exportado.")
-            for erro in resultado["erros"]:
-                st.write(f"- {erro}")
-        else:
-            st.success("Conversão concluída. O Analítico foi mantido como base do saldo.")
-        if resultado["avisos"]:
-            with st.expander(f"Avisos e inconsistências ({len(resultado['avisos'])})"):
-                for aviso in resultado["avisos"]:
-                    st.write(f"- {aviso}")
-        st.subheader("Prévia do saldo em estoque tratado")
-        st.dataframe(resultado["tratado"].head(100), use_container_width=True, height=420)
-        if not resultado["erros"]:
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                resultado["tratado"].to_excel(writer, sheet_name="EstoqueTratado", index=False)
-                resultado["validacao"].to_excel(writer, sheet_name="Validacao", index=False)
-                resultado["enderecos"].to_excel(writer, sheet_name="EnderecosConsolidados", index=False)
-            buffer.seek(0)
-            st.subheader("4. Exportar")
-            st.download_button("Baixar Estoque tratado", data=buffer, file_name="Estoque_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_estoque")
+st.markdown(
+    '<div class="section-band">'
+    '<div class="section-kicker">02 · RESULTADO</div>'
+    f'<div class="section-title">{cfg["derived_name"]}</div>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 
+if current is not None:
+    processed_at = derived_meta.get("processed_at") or (sync.get("derived") or {}).get("processed_at")
+    st.markdown(
+        '<div class="base-card">'
+        f'<div class="base-title">{cfg["derived_name"]}</div>'
+        '<div class="base-meta">'
+        '<div class="base-stat"><div class="base-label">Status</div><div class="base-value">ATUALIZADO</div></div>'
+        f'<div class="base-stat"><div class="base-label">Registros</div><div class="base-value">{len(current):,}</div></div>'
+        f'<div class="base-stat"><div class="base-label">Processado em</div><div class="base-value">{fmt_dt(processed_at)}</div></div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
-elif tipo_relatorio == "Compras — S.C + P.C + Pré-nota":
-    st.subheader("1. Enviar os três relatórios brutos")
-    st.caption("Todos usam a segunda linha como cabeçalho. No P.C, somente a planilha '2-Pedido de Compras   Autoriz' é utilizada.")
-    sc_arquivo = st.file_uploader("S.C — Solicitação de Compra", type=["xlsx", "xls", "xltx"], key="sc")
-    pc_arquivo = st.file_uploader("P.C — Pedido de Compra", type=["xlsx", "xls", "xltx"], key="pc")
-    pn_arquivo = st.file_uploader("Pré-nota", type=["xlsx", "xls", "xltx"], key="pre_nota")
+    if result:
+        errors = list(result.get("erros") or [])
+        warnings = list(result.get("avisos") or [])
+        if errors:
+            with st.expander(f"ERROS ({len(errors)})", expanded=True):
+                for item in errors:
+                    st.write(f"- {item}")
+        if warnings:
+            with st.expander(f"AVISOS ({len(warnings)})", expanded=False):
+                for item in warnings:
+                    st.write(f"- {item}")
 
-    if sc_arquivo is not None and pc_arquivo is not None and pn_arquivo is not None:
-        try:
-            sc_bruto = ler_compras_como_cabecalho(sc_arquivo)
-            excel_pc = pd.ExcelFile(pc_arquivo)
-            nome_aba_pc = "2-Pedido de Compras   Autoriz"
-            if nome_aba_pc not in excel_pc.sheet_names:
-                st.error(f"A planilha '{nome_aba_pc}' não foi encontrada no P.C.")
-                st.stop()
-            pc_bruto = ler_compras_como_cabecalho(pc_arquivo, sheet_name=nome_aba_pc)
-            pn_bruto = ler_compras_como_cabecalho(pn_arquivo)
-        except Exception as exc:
-            st.error(f"Não foi possível ler os relatórios de compras: {exc}")
-            st.stop()
+    st.dataframe(
+        current.head(150),
+        use_container_width=True,
+        height=460,
+        hide_index=True,
+    )
 
-        st.subheader("2. Regras aplicadas")
-        st.info("S.C: Centro de Custo 600307 + Saldo SC. P.C: Centro de Custo 600307 + (Quantidade - Qtd.Entregue). S.C e P.C são agrupados por produto e data de entrega; Pré-nota é somada somente por produto. Quantidades de S.C e P.C nunca são somadas entre si.")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Linhas S.C", f"{len(sc_bruto):,}".replace(",", "."))
-        c2.metric("Linhas P.C", f"{len(pc_bruto):,}".replace(",", "."))
-        c3.metric("Linhas Pré-nota", f"{len(pn_bruto):,}".replace(",", "."))
-        if st.button("Processar fluxo de compras", type="primary", use_container_width=True, key="processar_compras"):
-            with st.spinner("Consolidando S.C, P.C e Pré-nota..."):
-                st.session_state["resultado_compras"] = processar_compras(sc_bruto, pc_bruto, pn_bruto)
+    export_name = {
+        "Relatório Geral": "RelatorioGeral_Tratado.xlsx",
+        "Saldo em Estoque": "Estoque_Tratado.xlsx",
+        "Compras — S.C + P.C + Pré-nota": "Compras_Tratado.xlsx",
+        "MRP — TC/TP": "MRP_TC_TP_Tratado.xlsx",
+    }[tipo_relatorio]
 
-    if "resultado_compras" in st.session_state:
-        resultado = st.session_state["resultado_compras"]
-        st.subheader("3. Resultado da conversão")
-        metricas = resultado["metricas"]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("S.C tratadas", f"{metricas['linhas_sc_tratadas']:,}".replace(",", "."))
-        c2.metric("P.C tratadas", f"{metricas['linhas_pc_tratadas']:,}".replace(",", "."))
-        c3.metric("Produtos Pré-nota", f"{metricas['produtos_pre_nota']:,}".replace(",", "."))
-        c4.metric("Inconsistências", str(metricas["inconsistencias"]))
-        if resultado["erros"]:
-            st.error("Foram encontradas falhas estruturais. O arquivo não deve ser exportado.")
-            for erro in resultado["erros"]:
-                st.write(f"- {erro}")
-        else:
-            st.success("Fluxo de compras convertido e validado.")
-        if resultado["avisos"]:
-            with st.expander(f"Avisos e inconsistências ({len(resultado['avisos'])})"):
-                for aviso in resultado["avisos"]:
-                    st.write(f"- {aviso}")
-        st.subheader("Prévia da base comum")
-        st.dataframe(resultado["tratado"].head(150), use_container_width=True, height=480)
-        if not resultado["erros"]:
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                resultado["tratado"].to_excel(writer, sheet_name="ComprasTratado", index=False)
-                resultado["validacao"].to_excel(writer, sheet_name="Validacao", index=False)
-            buffer.seek(0)
-            st.subheader("4. Exportar")
-            st.download_button("Baixar Compras tratado", data=buffer, file_name="Compras_Tratado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="download_compras")
-
-
+    st.download_button(
+        "EXPORTAR EXCEL",
+        data=excel_bytes(current, cfg["derived_name"]),
+        file_name=export_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
 else:
-    st.subheader("1. Enviar os dois relatórios brutos")
-    st.caption("O PMP_ATUALIZADO define as OFs programadas e o H001 fornece a BOM fixa de cada produto intermediário.")
+    st.info("Base tratada ainda não disponível.")
 
-    pmp_arquivo = st.file_uploader(
-        "PMP_ATUALIZADO — programação de OFs",
-        type=["xlsx", "xls", "xltx"],
-        key="pmp_tc_tp",
-    )
-    h001_arquivo = st.file_uploader(
-        "H001 — lista de materiais (BOM)",
-        type=["xlsx", "xls", "xltx"],
-        key="h001_tc_tp",
-    )
-
-    if pmp_arquivo is not None and h001_arquivo is not None:
-        try:
-            pmp_bruto = ler_excel_seguro(pmp_arquivo)
-            h001_bruto = ler_excel_seguro(h001_arquivo)
-        except Exception as exc:
-            st.error(f"Não foi possível ler os relatórios de TC/TP: {exc}")
-            st.stop()
-
-        c1, c2 = st.columns(2)
-        c1.metric("Linhas PMP", f"{len(pmp_bruto):,}".replace(",", "."))
-        c2.metric("Linhas H001", f"{len(h001_bruto):,}".replace(",", "."))
-
-        st.subheader("2. Regras aplicadas")
-        st.info(
-            "PMP: somente STATUS = PROGRAMADO. Cada OF programada representa 1 unidade do produto. "
-            "A coluna P (CÓDIGO UNIFICADO) faz a junção com H001 coluna F. "
-            "A BOM vem de H001: H = MATERIAL, I = DESCRIÇÃO MATERIAL, L = QUANTIDADE. "
-            "A DATA DE NECESSIDADE é DATA DE ENTREGA do PMP menos 30 dias. "
-            "A semana é domingo a sábado, identificada por ano-semana (AAAA-SS); a NECESSIDADE DA SEMANA soma os materiais da mesma semana e do mesmo ano."
-        )
-
-        if st.button("Processar MRP — TC/TP", type="primary", use_container_width=True, key="processar_tc_tp"):
-            with st.spinner("Limpando PMP, expandindo BOM e calculando necessidades semanais..."):
-                st.session_state["resultado_tc_tp"] = processar_tc_tp(pmp_bruto, h001_bruto)
-
-    if "resultado_tc_tp" in st.session_state:
-        resultado = st.session_state["resultado_tc_tp"]
-        st.subheader("3. Resultado da conversão")
-        metricas = resultado["metricas"]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("OFs programadas", f"{metricas['ofs_programadas']:,}".replace(",", "."))
-        c2.metric("OFs com BOM", f"{metricas['ofs_com_bom']:,}".replace(",", "."))
-        c3.metric("Materiais únicos", f"{metricas['materiais_unicos']:,}".replace(",", "."))
-        c4.metric("Avisos", str(metricas["avisos"]))
-
-        if resultado["avisos"]:
-            with st.expander(f"Avisos e inconsistências ({len(resultado['avisos'])})", expanded=True):
-                for aviso in resultado["avisos"]:
-                    st.write(f"- {aviso}")
+with st.expander("CONTINGÊNCIA", expanded=False):
+    b1, b2 = st.columns(2)
+    if b1.button(
+        "REPROCESSAR BASE",
+        use_container_width=True,
+        key=f"force_{cfg['derived_key']}",
+    ):
+        with st.spinner("Reprocessando..."):
+            forced = pipelines.sync_pipeline(tipo_relatorio, force=True)
+        if forced.get("sync_status") == "PROCESSADO":
+            st.success("Base reprocessada.")
+            st.rerun()
         else:
-            st.success("Conversão concluída sem avisos.")
+            st.error(forced.get("error") or "Não foi possível reprocessar.")
 
-        st.subheader("Prévia do MRP — TC/TP")
-        st.dataframe(resultado["tratado"].head(150), use_container_width=True, height=480)
+    if b2.button(
+        "ATUALIZAR STATUS",
+        use_container_width=True,
+        key=f"refresh_{cfg['derived_key']}",
+    ):
+        st.rerun()
 
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            resultado["tratado"].to_excel(writer, sheet_name="MRP_TC_TP", index=False)
-            resultado["validacao"].to_excel(writer, sheet_name="Validacao", index=False)
-        buffer.seek(0)
-        st.subheader("4. Exportar")
-        st.download_button(
-            "Baixar MRP TC/TP tratado",
-            data=buffer,
-            file_name="MRP_TC_TP_Tratado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    source_options = {
+        pipelines.source_label(tipo_relatorio, key): key
+        for key in cfg["sources"]
+    }
+    selected_label = st.selectbox(
+        "Fonte para alimentação emergencial",
+        list(source_options.keys()),
+        key=f"emergency_source_{cfg['derived_key']}",
+    )
+    selected_key = source_options[selected_label]
+
+    upload = st.file_uploader(
+        "Arquivo",
+        type=["xlsx", "xls", "xlsm", "xltx", "csv"],
+        key=f"emergency_upload_{selected_key}_{cfg['derived_key']}",
+    )
+
+    if upload is not None:
+        raw = upload.getvalue()
+        rows = pipelines.count_rows(upload.name, raw)
+        c1, c2 = st.columns(2)
+        c1.metric("Arquivo", upload.name)
+        c2.metric("Registros", rows if rows else "—")
+
+        if st.button(
+            "ATUALIZAR FONTE NA CENTRAL",
+            type="primary",
             use_container_width=True,
-            key="download_tc_tp",
-        )
+            key=f"emergency_save_{selected_key}_{cfg['derived_key']}",
+        ):
+            try:
+                central.upload_source(
+                    selected_key,
+                    upload.name,
+                    raw,
+                    rows_count=rows,
+                    mime_type=upload.type or "application/octet-stream",
+                )
+                st.success("Fonte atualizada.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Falha na atualização: {exc}")
+
+st.markdown(
+    '<div class="footer">SETTA · Conversor MRP integrado à Central de Dados</div>',
+    unsafe_allow_html=True,
+)
