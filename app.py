@@ -167,16 +167,20 @@ st.markdown(
     .sidebar-brand-sub{margin-top:.18rem;font-size:.75rem;color:#6b7280}
     .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
     .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
-    .sidebar-status-spacer{height:5rem!important;min-height:5rem!important}
+    .sidebar-status-spacer{height:.6rem!important;min-height:.6rem!important}
     .sidebar-status-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.72rem;line-height:1.5}
     .sidebar-status-name{font-size:.68rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.025em}
     .sidebar-status-value{margin-top:.16rem;font-size:.8rem;font-weight:900;color:#111827;text-transform:uppercase}
     .sidebar-status-meta{margin-top:.24rem;color:#6b7280;font-size:.66rem;line-height:1.45;text-transform:uppercase}
+    section[data-testid="stSidebar"] hr{margin:.85rem 0!important}
     section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;gap:.34rem}
     section[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"],
     section[data-testid="stSidebar"] div[role="radiogroup"] [data-testid="stMarkdownContainer"] + div{position:absolute!important;opacity:0!important;pointer-events:none!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label{position:relative;width:100%;min-height:42px;display:flex!important;align-items:center!important;padding:.56rem .72rem .56rem .88rem!important;margin:0!important;border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease;box-sizing:border-box}
     section[data-testid="stSidebar"] div[role="radiogroup"] label>div:first-child{display:none!important;position:absolute!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label div:has(input[type="radio"]){display:none!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label input[type="radio"]{display:none!important;appearance:none!important;-webkit-appearance:none!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label svg{display:none!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important;transform:translateX(1px)}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important}
