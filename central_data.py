@@ -137,7 +137,7 @@ def upload_source(
     client.storage.from_(BUCKET).upload_to_signed_url(
         path=path,
         token=token,
-        file=io.BytesIO(raw),
+        file=raw,
     )
 
     return api_call(
@@ -182,7 +182,7 @@ def publish_derived(
     client.storage.from_(BUCKET).upload_to_signed_url(
         path=path,
         token=token,
-        file=io.BytesIO(raw),
+        file=raw,
     )
 
     return api_call(
