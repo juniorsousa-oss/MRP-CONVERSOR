@@ -7,7 +7,6 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from PIL import Image
-from streamlit_autorefresh import st_autorefresh
 
 import central_data as central
 import pipeline_sync as pipelines
@@ -167,11 +166,13 @@ st.markdown(
     .sidebar-brand-sub{margin-top:.18rem;font-size:.75rem;color:#6b7280}
     .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
     .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
-    .sidebar-nav{display:flex;flex-direction:column;gap:.34rem;width:100%}
-    .sidebar-nav-item{position:relative;width:100%;min-height:42px;display:flex;align-items:center;padding:.56rem .72rem .56rem calc(.88rem + 10px);margin:0;border:1px solid transparent;border-radius:10px;background:transparent;box-sizing:border-box;text-decoration:none!important;color:#374151!important;font-size:.83rem;font-weight:600;line-height:1.2;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease}
-    .sidebar-nav-item:hover{background:#f8fafc;border-color:#e5e7eb;transform:translateX(1px);color:#111827!important}
-    .sidebar-nav-item.active{background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important;color:#fff!important;font-weight:700}
-    .sidebar-nav-item.active::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
+    section[data-testid="stSidebar"] div[data-testid="stButton"]{margin:0!important}
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button{position:relative!important;min-height:42px!important;justify-content:flex-start!important;text-align:left!important;padding:.56rem .72rem .56rem calc(.88rem + 10px)!important;border-radius:10px!important;font-size:.83rem!important;font-weight:600!important;line-height:1.2!important;width:100%!important}
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]{background:transparent!important;border:1px solid transparent!important;color:#374151!important;box-shadow:none!important}
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]:hover{background:#f8fafc!important;border-color:#e5e7eb!important;color:#111827!important}
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"]{background:#111827!important;border:1px solid #111827!important;color:#fff!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important;font-weight:700!important}
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"]::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(div[data-testid="stButton"]){margin-bottom:-.45rem!important}
     .sidebar-status-spacer{height:.6rem!important;min-height:.6rem!important}
     .sidebar-status-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.72rem;line-height:1.5}
     .sidebar-status-name{font-size:.68rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.025em}
@@ -246,37 +247,21 @@ NAV_OPTIONS = {
 }
 
 
+def _set_nav(key: str) -> None:
+    if key in NAV_OPTIONS:
+        st.session_state["_mrp_conversor_nav"] = key
+
+
 def current_nav_key() -> str:
-    try:
-        value = st.query_params.get("nav", "relatorio-geral")
-    except Exception:
-        value = "relatorio-geral"
-    if isinstance(value, (list, tuple)):
-        value = value[0] if value else "relatorio-geral"
-    value = str(value or "relatorio-geral").strip()
-    return value if value in NAV_OPTIONS else "relatorio-geral"
-
-
-def sidebar_nav_html(active_key: str) -> str:
-    items = []
-    for key, (label, _) in NAV_OPTIONS.items():
-        active = " active" if key == active_key else ""
-        items.append(
-            f'<a class="sidebar-nav-item{active}" href="?nav={key}" target="_self">'
-            f'{label}'
-            '</a>'
-        )
-    return '<div class="sidebar-nav">' + "".join(items) + "</div>"
+    key = str(st.session_state.get("_mrp_conversor_nav") or "relatorio-geral")
+    if key not in NAV_OPTIONS:
+        key = "relatorio-geral"
+        st.session_state["_mrp_conversor_nav"] = key
+    return key
 
 
 
 with st.sidebar:
-    st_autorefresh(
-        interval=60_000,
-        limit=None,
-        key="mrp_conversor_central_refresh",
-    )
-
     st.markdown(
         '<div class="sidebar-brand">'
         '<div class="sidebar-brand-title">CONVERSOR MRP</div>'
@@ -288,16 +273,21 @@ with st.sidebar:
 
     _nav_key = current_nav_key()
     selected_nav, tipo_relatorio = NAV_OPTIONS[_nav_key]
-    st.markdown(
-        sidebar_nav_html(_nav_key),
-        unsafe_allow_html=True,
-    )
+    for _key, (_label, _) in NAV_OPTIONS.items():
+        st.button(
+            _label,
+            key=f"mrp_conversor_nav_{_key}",
+            type="primary" if _key == _nav_key else "secondary",
+            use_container_width=True,
+            on_click=_set_nav,
+            args=(_key,),
+        )
 
     st.divider()
     st.markdown(
         '<div class="sidebar-info-card">'
         '<b>SISTEMA</b><br>'
-        'ATUALIZAÇÃO AUTOMÁTICA · 60 S'
+        'ATUALIZAÇÃO SOB DEMANDA'
         '</div>',
         unsafe_allow_html=True,
     )
