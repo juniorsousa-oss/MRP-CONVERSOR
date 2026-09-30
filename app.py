@@ -70,6 +70,81 @@ def fmt_dt(value) -> str:
         return "—"
 
 
+def converter_general_status() -> dict:
+    total = len(pipelines.PIPELINES)
+    states = []
+    errors = 0
+
+    for report_type in pipelines.PIPELINES:
+        try:
+            states.append(pipelines.get_state(report_type))
+        except Exception:
+            errors += 1
+
+    updated = 0
+    processed_values = []
+    stale = False
+    waiting = False
+
+    for state in states:
+        derived = state.get("derived") or {}
+        available = bool(derived.get("available"))
+        ready = bool(state.get("ready"))
+        is_stale = bool(state.get("stale"))
+        stale = stale or is_stale
+        waiting = waiting or (not ready) or (not available)
+
+        if ready and available and not is_stale:
+            updated += 1
+
+        processed_at = derived.get("processed_at")
+        if processed_at:
+            try:
+                stamp = pd.to_datetime(processed_at, errors="coerce", utc=True)
+                if pd.notna(stamp):
+                    processed_values.append(stamp)
+            except Exception:
+                pass
+
+    if errors:
+        status = "ERRO"
+    elif waiting:
+        status = "AGUARDANDO"
+    elif stale:
+        status = "ATUALIZAÇÃO PENDENTE"
+    elif updated == total and total:
+        status = "ATUALIZADO"
+    else:
+        status = "AGUARDANDO"
+
+    last_update = max(processed_values).isoformat() if processed_values else None
+    return {
+        "status": status,
+        "last_update": last_update,
+        "summary": f"{updated}/{total} BASES OK",
+    }
+
+
+def converter_status_html(status_info: dict) -> str:
+    status_info = status_info or {}
+    status = str(status_info.get("status") or "AGUARDANDO").upper()
+    when = fmt_dt(status_info.get("last_update"))
+    summary = str(status_info.get("summary") or "").upper()
+    meta = " · ".join(
+        part for part in [when if when != "—" else "", summary] if part
+    )
+    if not meta:
+        meta = "SEM ATUALIZAÇÃO REGISTRADA"
+
+    return (
+        '<div class="sidebar-status-card">'
+        '<div class="sidebar-status-name">CONVERSOR MRP</div>'
+        f'<div class="sidebar-status-value">{status}</div>'
+        f'<div class="sidebar-status-meta">{meta}</div>'
+        '</div>'
+    )
+
+
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=8)
 def excel_bytes(frame: pd.DataFrame, sheet_name: str) -> bytes:
     buffer = io.BytesIO()
@@ -92,11 +167,16 @@ st.markdown(
     .sidebar-brand-sub{margin-top:.18rem;font-size:.75rem;color:#6b7280}
     .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
     .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
+    .sidebar-status-spacer{height:5rem!important;min-height:5rem!important}
+    .sidebar-status-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.72rem;line-height:1.5}
+    .sidebar-status-name{font-size:.68rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.025em}
+    .sidebar-status-value{margin-top:.16rem;font-size:.8rem;font-weight:900;color:#111827;text-transform:uppercase}
+    .sidebar-status-meta{margin-top:.24rem;color:#6b7280;font-size:.66rem;line-height:1.45;text-transform:uppercase}
     section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;gap:.34rem}
     section[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"],
     section[data-testid="stSidebar"] div[role="radiogroup"] [data-testid="stMarkdownContainer"] + div{position:absolute!important;opacity:0!important;pointer-events:none!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label{position:relative;width:100%;min-height:42px;display:flex!important;align-items:center!important;padding:.56rem .72rem .56rem .88rem!important;margin:0!important;border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease;box-sizing:border-box}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label>div:first-child{position:absolute!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label>div:first-child{display:none!important;position:absolute!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important;transform:translateX(1px)}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important}
@@ -202,6 +282,21 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    st.divider()
+    st.markdown(
+        '<div class="sidebar-status-spacer"></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="sidebar-section-label">STATUS GERAL</div>',
+        unsafe_allow_html=True,
+    )
+    _converter_status_placeholder = st.empty()
+    _converter_status_placeholder.markdown(
+        converter_status_html(converter_general_status()),
+        unsafe_allow_html=True,
+    )
+
 
 if logo_bytes:
     logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
@@ -298,6 +393,13 @@ def render_report(report_type: str) -> None:
         )
     elif sync_status == "PROCESSADO":
         st.success(f'{cfg["derived_name"]} ATUALIZADA AUTOMATICAMENTE.')
+        try:
+            _converter_status_placeholder.markdown(
+                converter_status_html(converter_general_status()),
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
 
     result = sync.get("result")
     derived_meta = sync.get("derived") or {}
