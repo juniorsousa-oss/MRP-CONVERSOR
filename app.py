@@ -93,10 +93,12 @@ st.markdown(
     .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
     .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
     section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;gap:.34rem}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label{position:relative;width:100%;min-height:42px;display:flex!important;align-items:center!important;padding:.56rem .72rem .56rem .88rem!important;margin:0!important;border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;cursor:pointer;box-sizing:border-box}
+    section[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"],
+    section[data-testid="stSidebar"] div[role="radiogroup"] [data-testid="stMarkdownContainer"] + div{position:absolute!important;opacity:0!important;pointer-events:none!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label{position:relative;width:100%;min-height:42px;display:flex!important;align-items:center!important;padding:.56rem .72rem .56rem .88rem!important;margin:0!important;border:1px solid transparent!important;border-radius:10px!important;background:transparent!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease;box-sizing:border-box}
     section[data-testid="stSidebar"] div[role="radiogroup"] label>div:first-child{position:absolute!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important;text-transform:uppercase!important}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label p{margin:0!important;font-size:.83rem!important;font-weight:600!important;color:#374151!important;line-height:1.2!important}
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{background:#f8fafc!important;border-color:#e5e7eb!important;transform:translateX(1px)}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){background:#111827!important;border-color:#111827!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked)::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p{color:#fff!important;font-weight:700!important}
@@ -114,9 +116,11 @@ st.markdown(
     .app-title{margin:0!important;padding:0!important;font-size:2.55rem!important;line-height:1.08!important;font-weight:800!important;letter-spacing:-.04em!important;color:#050505!important}
     .app-sub{margin-top:.72rem!important;margin-bottom:1.65rem!important;color:#4f5661!important;font-size:.94rem!important;line-height:1.35!important}
 
-    .section-band{margin:1.15rem 0 .85rem;padding:.78rem 1rem;background:#fff;border:1px solid #e5e8ee;border-left:5px solid #111827;border-radius:12px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
-    .section-kicker{font-size:.64rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#ef4444;margin-bottom:.14rem}
-    .section-title{font-size:1.03rem;font-weight:900;color:#111827;letter-spacing:-.012em;text-transform:uppercase}
+    .section-title{margin:0 0 1rem!important;color:#0f172a!important;font-size:1.28rem!important;font-weight:900!important;letter-spacing:-.02em;text-transform:uppercase}
+    .section-band{margin:0 0 .95rem;padding:.82rem 1rem;background:#fff;border:1px solid #e5e8ee;border-left:5px solid #111827;border-radius:12px;box-shadow:0 3px 12px rgba(15,23,42,.035)}
+    .section-band-kicker{font-size:.66rem;font-weight:900;letter-spacing:.085em;text-transform:uppercase;color:#ef4444;margin-bottom:.18rem}
+    .section-band-title{font-size:1.08rem;font-weight:900;color:#111827;letter-spacing:-.015em;line-height:1.2;text-transform:uppercase}
+    .section-band-note{margin-top:.22rem;color:#667085;font-size:.75rem;line-height:1.35}
     .topic-divider{height:1px;background:#cbd5e1;margin:1.55rem 0 1.05rem;width:100%}
 
     .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.72rem;margin:.25rem 0 1rem}
@@ -136,13 +140,19 @@ st.markdown(
     div[data-testid="stMetric"]{background:#fff;border:1px solid #e7eaf0;border-radius:12px;padding:.8rem 1rem}
     div[data-testid="stFileUploader"] section{border-radius:10px}
     div.stButton>button[kind="primary"],div.stDownloadButton>button{border-radius:9px;font-weight:700}
-    .footer{text-align:center;color:#9298a1;font-size:.7rem;padding-top:1.4rem}
+    [data-testid="stTabs"] button{font-weight:800!important;text-transform:uppercase!important;letter-spacing:.015em!important}
+    div[data-testid="stMarkdownContainer"] h1,
+    div[data-testid="stMarkdownContainer"] h2,
+    div[data-testid="stMarkdownContainer"] h3,
+    div[data-testid="stMarkdownContainer"] h4{text-transform:uppercase}
+    [data-testid="stAlert"]{border-radius:12px!important;box-shadow:0 3px 12px rgba(15,23,42,.035)}
+    .footer{text-align:center;color:#9298a1;font-size:.72rem;padding-top:1.2rem}
 
     @media(max-width:1000px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:900px){
       .block-container{padding-top:2rem!important;padding-left:1rem!important;padding-right:1rem!important;padding-bottom:2rem!important}
       .setta-logo-card{min-height:105px;margin-bottom:1.8rem;padding:.9rem 1rem}.setta-logo-card img{max-width:170px;max-height:72px}
-      .app-title{font-size:2rem!important}.source-grid,.base-meta{grid-template-columns:1fr!important}
+      .app-title{font-size:2rem!important;line-height:1.12!important}.app-sub{font-size:.86rem!important;margin-bottom:1.35rem!important}.section-title{font-size:1.14rem!important}.source-grid,.base-meta{grid-template-columns:1fr!important}
     }
     </style>
     """,
@@ -156,7 +166,9 @@ NAV_OPTIONS = {
     "SALDO EM ESTOQUE": "Saldo em Estoque",
     "COMPRAS": "Compras — S.C + P.C + Pré-nota",
     "MRP — TC/TP": "MRP — TC/TP",
+    "CONFIGURAÇÕES": None,
 }
+
 
 with st.sidebar:
     st_autorefresh(
@@ -175,20 +187,21 @@ with st.sidebar:
     )
 
     selected_nav = st.radio(
-        "NAVEGAÇÃO",
+        "Página",
         list(NAV_OPTIONS.keys()),
         label_visibility="collapsed",
     )
     tipo_relatorio = NAV_OPTIONS[selected_nav]
 
-    st.markdown("---")
+    st.divider()
     st.markdown(
         '<div class="sidebar-info-card">'
-        '<b>CENTRAL DE DADOS</b><br>'
+        '<b>SISTEMA</b><br>'
         'ATUALIZAÇÃO AUTOMÁTICA · 60 S'
         '</div>',
         unsafe_allow_html=True,
     )
+
 
 if logo_bytes:
     logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
@@ -205,209 +218,285 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<p class="app-sub">Central de Dados • Conversão • Validação</p>',
+    '<p class="app-sub">CENTRAL DE DADOS • CONVERSÃO • VALIDAÇÃO</p>',
     unsafe_allow_html=True,
 )
 
-cfg = pipelines.config_for(tipo_relatorio)
-
-try:
-    with st.spinner("Sincronizando com a Central de Dados..."):
-        sync = pipelines.sync_pipeline(tipo_relatorio)
-except Exception as exc:
-    sync = {
-        "config": cfg,
-        "sources": {},
-        "derived": {},
-        "versions": {},
-        "ready": False,
-        "stale": False,
-        "sync_status": "ERRO",
-        "result": None,
-        "error": str(exc),
-    }
-
-st.markdown(
-    '<div class="section-band">'
-    '<div class="section-kicker">01 · FONTES</div>'
-    '<div class="section-title">CENTRAL DE DADOS</div>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-source_cards = []
-for key in cfg["sources"]:
-    meta = (sync.get("sources") or {}).get(key) or {}
-    available = bool(meta.get("available"))
-    accent = "#22c55e" if available else "#f59e0b"
-    status_txt = "ATUALIZADO" if available else "AGUARDANDO"
-    version = int(meta.get("version") or 0)
-    source_cards.append(
-        '<div class="source-card" '
-        f'style="--accent:{accent}">'
-        f'<div class="source-name">{pipelines.source_label(tipo_relatorio, key)}</div>'
-        f'<div class="source-status">{status_txt}</div>'
-        f'<div class="source-meta">v{version} • {fmt_dt(meta.get("last_update_at"))}</div>'
-        '</div>'
+def section_band(kicker: str, title: str, note: str = "") -> None:
+    note_html = (
+        f'<div class="section-band-note">{note}</div>'
+        if str(note or "").strip()
+        else ""
     )
-
-st.markdown(
-    '<div class="source-grid">' + "".join(source_cards) + "</div>",
-    unsafe_allow_html=True,
-)
-
-sync_status = str(sync.get("sync_status") or "")
-if sync_status == "PROCESSADO":
-    st.success(f"{cfg['derived_name']} atualizada automaticamente.")
-elif sync_status == "ERRO":
-    st.error(sync.get("error") or "Falha no processamento.")
-elif sync_status == "AGUARDANDO":
-    missing = [
-        pipelines.source_label(tipo_relatorio, key)
-        for key in cfg["sources"]
-        if not bool(((sync.get("sources") or {}).get(key) or {}).get("available"))
-    ]
-    st.warning("Aguardando: " + " • ".join(missing))
-
-result = sync.get("result")
-derived_meta = sync.get("derived") or {}
-
-if result and isinstance(result.get("tratado"), pd.DataFrame):
-    current = result["tratado"]
-else:
-    current, downloaded_meta = pipelines.current_frame(
-        tipo_relatorio,
-        derived_meta=derived_meta,
-    )
-    if downloaded_meta:
-        derived_meta = downloaded_meta
-
-st.markdown('<div class="topic-divider"></div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="section-band">'
-    '<div class="section-kicker">02 · RESULTADO</div>'
-    f'<div class="section-title">{cfg["derived_name"]}</div>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-if current is not None:
-    processed_at = derived_meta.get("processed_at") or (sync.get("derived") or {}).get("processed_at")
     st.markdown(
-        '<div class="base-card">'
-        f'<div class="base-title">{cfg["derived_name"]}</div>'
-        '<div class="base-meta">'
-        '<div class="base-stat"><div class="base-label">Status</div><div class="base-value">ATUALIZADO</div></div>'
-        f'<div class="base-stat"><div class="base-label">Registros</div><div class="base-value">{len(current):,}</div></div>'
-        f'<div class="base-stat"><div class="base-label">Processado em</div><div class="base-value">{fmt_dt(processed_at)}</div></div>'
-        '</div></div>',
+        f"""
+        <div class="section-band">
+            <div class="section-band-kicker">{kicker}</div>
+            <div class="section-band-title">{title}</div>
+            {note_html}
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    if result:
-        errors = list(result.get("erros") or [])
-        warnings = list(result.get("avisos") or [])
-        if errors:
-            with st.expander(f"ERROS ({len(errors)})", expanded=True):
-                for item in errors:
-                    st.write(f"- {item}")
-        if warnings:
-            with st.expander(f"AVISOS ({len(warnings)})", expanded=False):
-                for item in warnings:
-                    st.write(f"- {item}")
 
-    st.dataframe(
-        current.head(150),
-        use_container_width=True,
-        height=460,
-        hide_index=True,
+def source_cards_html(report_type: str, source_state: dict) -> str:
+    cfg = pipelines.config_for(report_type)
+    cards = []
+    for key in cfg["sources"]:
+        meta = (source_state or {}).get(key) or {}
+        available = bool(meta.get("available"))
+        accent = "#22c55e" if available else "#f59e0b"
+        status_txt = "ATUALIZADO" if available else "AGUARDANDO"
+        version = int(meta.get("version") or 0)
+        cards.append(
+            '<div class="source-card" '
+            f'style="--accent:{accent}">'
+            f'<div class="source-name">{pipelines.source_label(report_type, key)}</div>'
+            f'<div class="source-status">{status_txt}</div>'
+            f'<div class="source-meta">V{version} · {fmt_dt(meta.get("last_update_at"))}</div>'
+            '</div>'
+        )
+    return '<div class="source-grid">' + "".join(cards) + "</div>"
+
+
+def render_report(report_type: str) -> None:
+    cfg = pipelines.config_for(report_type)
+
+    try:
+        with st.spinner("Sincronizando com a Central de Dados..."):
+            sync = pipelines.sync_pipeline(report_type)
+    except Exception as exc:
+        sync = {
+            "config": cfg,
+            "sources": {},
+            "derived": {},
+            "versions": {},
+            "ready": False,
+            "stale": False,
+            "sync_status": "ERRO",
+            "result": None,
+            "error": str(exc),
+        }
+
+    st.markdown(
+        f'<div class="section-title">{selected_nav}</div>',
+        unsafe_allow_html=True,
     )
+    section_band("01 · RESULTADO", cfg["derived_name"])
 
-    export_name = {
-        "Relatório Geral": "RelatorioGeral_Tratado.xlsx",
-        "Saldo em Estoque": "Estoque_Tratado.xlsx",
-        "Compras — S.C + P.C + Pré-nota": "Compras_Tratado.xlsx",
-        "MRP — TC/TP": "MRP_TC_TP_Tratado.xlsx",
-    }[tipo_relatorio]
+    sync_status = str(sync.get("sync_status") or "")
+    if sync_status == "ERRO":
+        st.error(
+            (sync.get("error") or "Falha no processamento.")
+            + " Consulte CONFIGURAÇÕES > STATUS API."
+        )
+    elif sync_status == "AGUARDANDO":
+        st.warning(
+            "BASE AGUARDANDO ATUALIZAÇÃO. "
+            "CONSULTE CONFIGURAÇÕES > STATUS API."
+        )
+    elif sync_status == "PROCESSADO":
+        st.success(f'{cfg["derived_name"]} ATUALIZADA AUTOMATICAMENTE.')
 
-    st.download_button(
-        "EXPORTAR EXCEL",
-        data=excel_bytes(current, cfg["derived_name"]),
-        file_name=export_name,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
-else:
-    st.info("Base tratada ainda não disponível.")
+    result = sync.get("result")
+    derived_meta = sync.get("derived") or {}
 
-st.markdown('<div class="topic-divider"></div>', unsafe_allow_html=True)
-with st.expander("CONTINGÊNCIA", expanded=False):
-    b1, b2 = st.columns(2)
-    if b1.button(
-        "REPROCESSAR BASE",
-        use_container_width=True,
-        key=f"force_{cfg['derived_key']}",
-    ):
-        with st.spinner("Reprocessando..."):
-            forced = pipelines.sync_pipeline(tipo_relatorio, force=True)
-        if forced.get("sync_status") == "PROCESSADO":
-            pipelines.clear_current_frame_cache()
-            st.success("Base reprocessada.")
-            st.rerun()
-        else:
-            st.error(forced.get("error") or "Não foi possível reprocessar.")
+    if result and isinstance(result.get("tratado"), pd.DataFrame):
+        current = result["tratado"]
+    else:
+        current, downloaded_meta = pipelines.current_frame(
+            report_type,
+            derived_meta=derived_meta,
+        )
+        if downloaded_meta:
+            derived_meta = downloaded_meta
 
-    if b2.button(
-        "ATUALIZAR STATUS",
-        use_container_width=True,
-        key=f"refresh_{cfg['derived_key']}",
-    ):
-        st.rerun()
+    if current is not None:
+        processed_at = (
+            derived_meta.get("processed_at")
+            or (sync.get("derived") or {}).get("processed_at")
+        )
+        st.markdown(
+            '<div class="base-card">'
+            f'<div class="base-title">{cfg["derived_name"]}</div>'
+            '<div class="base-meta">'
+            '<div class="base-stat"><div class="base-label">STATUS</div><div class="base-value">ATUALIZADO</div></div>'
+            f'<div class="base-stat"><div class="base-label">REGISTROS</div><div class="base-value">{len(current):,}</div></div>'
+            f'<div class="base-stat"><div class="base-label">PROCESSADO EM</div><div class="base-value">{fmt_dt(processed_at)}</div></div>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    source_options = {
-        pipelines.source_label(tipo_relatorio, key): key
-        for key in cfg["sources"]
-    }
-    selected_label = st.selectbox(
-        "Fonte para alimentação emergencial",
-        list(source_options.keys()),
-        key=f"emergency_source_{cfg['derived_key']}",
-    )
-    selected_key = source_options[selected_label]
+        if result:
+            errors = list(result.get("erros") or [])
+            warnings = list(result.get("avisos") or [])
+            if errors:
+                with st.expander(f"ERROS ({len(errors)})", expanded=True):
+                    for item in errors:
+                        st.write(f"- {item}")
+            if warnings:
+                with st.expander(f"AVISOS ({len(warnings)})", expanded=False):
+                    for item in warnings:
+                        st.write(f"- {item}")
 
-    upload = st.file_uploader(
-        "Arquivo",
-        type=["xlsx", "xls", "xlsm", "xltx", "csv"],
-        key=f"emergency_upload_{selected_key}_{cfg['derived_key']}",
-    )
-
-    if upload is not None:
-        raw = upload.getvalue()
-        rows = pipelines.count_rows(upload.name, raw)
-        c1, c2 = st.columns(2)
-        c1.metric("Arquivo", upload.name)
-        c2.metric("Registros", rows if rows else "—")
-
-        if st.button(
-            "ATUALIZAR FONTE NA CENTRAL",
-            type="primary",
+        st.dataframe(
+            current.head(150),
             use_container_width=True,
-            key=f"emergency_save_{selected_key}_{cfg['derived_key']}",
-        ):
-            try:
-                central.upload_source(
-                    selected_key,
-                    upload.name,
-                    raw,
-                    rows_count=rows,
-                    mime_type=upload.type or "application/octet-stream",
+            height=460,
+            hide_index=True,
+        )
+
+        export_name = {
+            "Relatório Geral": "RelatorioGeral_Tratado.xlsx",
+            "Saldo em Estoque": "Estoque_Tratado.xlsx",
+            "Compras — S.C + P.C + Pré-nota": "Compras_Tratado.xlsx",
+            "MRP — TC/TP": "MRP_TC_TP_Tratado.xlsx",
+        }[report_type]
+
+        st.download_button(
+            "EXPORTAR EXCEL",
+            data=excel_bytes(current, cfg["derived_name"]),
+            file_name=export_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    else:
+        st.info(
+            "BASE TRATADA AINDA NÃO DISPONÍVEL. "
+            "CONSULTE CONFIGURAÇÕES > STATUS API."
+        )
+
+
+def render_status_api() -> None:
+    tab_api, = st.tabs(["STATUS API"])
+
+    with tab_api:
+        for index, report_type in enumerate(pipelines.PIPELINES.keys(), start=1):
+            if index > 1:
+                st.markdown(
+                    '<div class="topic-divider"></div>',
+                    unsafe_allow_html=True,
                 )
-                st.success("Fonte atualizada.")
-                st.rerun()
+
+            cfg = pipelines.config_for(report_type)
+            section_band(
+                f"{index:02d} · {report_type.upper()}",
+                "CENTRAL DE DADOS",
+            )
+
+            try:
+                state = pipelines.get_state(report_type)
+                st.markdown(
+                    source_cards_html(report_type, state.get("sources") or {}),
+                    unsafe_allow_html=True,
+                )
+
+                derived = state.get("derived") or {}
+                if bool(derived.get("available")):
+                    st.caption(
+                        "BASE TRATADA · "
+                        f'{cfg["derived_name"]} · '
+                        f'{fmt_dt(derived.get("processed_at"))}'
+                    )
+                else:
+                    st.caption(
+                        f'BASE TRATADA · {cfg["derived_name"]} · AGUARDANDO'
+                    )
             except Exception as exc:
-                st.error(f"Falha na atualização: {exc}")
+                state = {"sources": {}, "derived": {}}
+                st.error(f"Falha ao consultar a Central de Dados: {exc}")
+
+            with st.expander(
+                f"CONTINGÊNCIA · {report_type.upper()}",
+                expanded=False,
+            ):
+                b1, b2 = st.columns(2)
+
+                if b1.button(
+                    "REPROCESSAR BASE",
+                    use_container_width=True,
+                    key=f'force_{cfg["derived_key"]}_status_api',
+                ):
+                    try:
+                        with st.spinner("Reprocessando..."):
+                            forced = pipelines.sync_pipeline(
+                                report_type,
+                                force=True,
+                            )
+                        if forced.get("sync_status") == "PROCESSADO":
+                            pipelines.clear_current_frame_cache()
+                            st.success("BASE REPROCESSADA.")
+                            st.rerun()
+                        else:
+                            st.error(
+                                forced.get("error")
+                                or "NÃO FOI POSSÍVEL REPROCESSAR."
+                            )
+                    except Exception as exc:
+                        st.error(f"FALHA NO REPROCESSAMENTO: {exc}")
+
+                if b2.button(
+                    "ATUALIZAR STATUS",
+                    use_container_width=True,
+                    key=f'refresh_{cfg["derived_key"]}_status_api',
+                ):
+                    st.rerun()
+
+                source_options = {
+                    pipelines.source_label(report_type, key): key
+                    for key in cfg["sources"]
+                }
+                selected_label = st.selectbox(
+                    "FONTE PARA ALIMENTAÇÃO EMERGENCIAL",
+                    list(source_options.keys()),
+                    key=f'emergency_source_{cfg["derived_key"]}_status_api',
+                )
+                selected_key = source_options[selected_label]
+
+                upload = st.file_uploader(
+                    "ARQUIVO",
+                    type=["xlsx", "xls", "xlsm", "xltx", "csv"],
+                    key=f'emergency_upload_{selected_key}_{cfg["derived_key"]}_status_api',
+                )
+
+                if upload is not None:
+                    raw = upload.getvalue()
+                    rows = pipelines.count_rows(upload.name, raw)
+                    c1, c2 = st.columns(2)
+                    c1.metric("ARQUIVO", upload.name)
+                    c2.metric("REGISTROS", rows if rows else "—")
+
+                    if st.button(
+                        "ATUALIZAR FONTE NA CENTRAL",
+                        type="primary",
+                        use_container_width=True,
+                        key=f'emergency_save_{selected_key}_{cfg["derived_key"]}_status_api',
+                    ):
+                        try:
+                            central.upload_source(
+                                selected_key,
+                                upload.name,
+                                raw,
+                                rows_count=rows,
+                                mime_type=(
+                                    upload.type
+                                    or "application/octet-stream"
+                                ),
+                            )
+                            st.success("FONTE ATUALIZADA.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"FALHA NA ATUALIZAÇÃO: {exc}")
+
+
+if selected_nav == "CONFIGURAÇÕES":
+    render_status_api()
+else:
+    render_report(tipo_relatorio)
+
 
 st.markdown(
-    '<div class="footer">SETTA · Conversor MRP integrado à Central de Dados</div>',
+    '<div class="footer">SETTA | Conversor MRP</div>',
     unsafe_allow_html=True,
 )
