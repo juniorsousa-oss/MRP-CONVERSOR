@@ -73,3 +73,17 @@ jobs:
           assert derived.get("base_key") == "relatorio_geral_tratado", derived
           print("pipeline-state-ok")
           PY
+
+      - name: Startup sync architecture smoke test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app = Path("app.py").read_text(encoding="utf-8")
+          pipeline = Path("pipeline_sync.py").read_text(encoding="utf-8")
+          assert "def sync_all_pipelines(" in pipeline
+          assert "def warm_all_current_frames(" in pipeline
+          assert "ATUALIZANDO TODAS AS BASES DO CONVERSOR MRP" in app
+          assert 'with st.spinner("Sincronizando com a Central de Dados...")' not in app
+          assert "ÚLTIMA ATUALIZAÇÃO" in app
+          print("startup-sync-ok")
+          PY
