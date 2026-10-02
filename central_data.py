@@ -219,6 +219,7 @@ def _upload_normalized_source(
     source_key: str,
     normalized: bytes,
     normalized_rows: int,
+    source_version: int,
 ) -> dict:
     prepared = api_call(
         "source_normalized_upload_prepare",
@@ -236,13 +237,19 @@ def _upload_normalized_source(
         token=token,
         file=normalized,
     )
-    return {
-        "normalized_storage_path": path,
-        "normalized_format": "SETTA_SOURCE_V1",
-        "normalized_mime_type": "application/gzip",
-        "normalized_rows_count": int(normalized_rows),
-        "normalized_sha256": hashlib.sha256(normalized).hexdigest(),
-    }
+
+    return api_call(
+        "source_normalized_commit",
+        {
+            "source_key": source_key,
+            "source_version": int(source_version),
+            "rows_count": int(normalized_rows),
+            "format": "SETTA_SOURCE_V1",
+            "profile": "WORKBOOK_MATRIX_V1",
+            "content_sha256": hashlib.sha256(normalized).hexdigest(),
+        },
+        timeout=30,
+    ).get("data") or {}
 
 
 def download_normalized_source(
@@ -352,11 +359,16 @@ def upload_source(
     rows_count: int = 0,
     mime_type: str = "application/octet-stream",
 ) -> dict:
+    """Upload emergencial mantendo a mesma regra da Central: Excel entra uma vez."""
     normalized, normalized_rows = build_normalized_source(
         source_key,
         file_name,
         raw,
     )
+    if not normalized:
+        raise ValueError(
+            f"A fonte {source_key} precisa ser tabular para atualização emergencial."
+        )
 
     prepared = api_call(
         "source_upload_prepare",
@@ -375,26 +387,26 @@ def upload_source(
         file=raw,
     )
 
-    normalized_meta: dict[str, Any] = {}
-    if normalized:
-        normalized_meta = _upload_normalized_source(
-            source_key,
-            normalized,
-            normalized_rows,
-        )
-
-    return api_call(
+    committed = api_call(
         "source_commit",
         {
             "source_key": source_key,
             "file_name": file_name,
             "mime_type": mime_type,
-            "rows_count": int(rows_count),
+            "rows_count": int(rows_count or normalized_rows),
             "content_sha256": hashlib.sha256(raw).hexdigest(),
-            **normalized_meta,
         },
         timeout=30,
     ).get("data") or {}
+
+    normalized_meta = _upload_normalized_source(
+        source_key,
+        normalized,
+        normalized_rows,
+        int(committed.get("version") or 0),
+    )
+    return {**committed, "normalized": normalized_meta}
+
 
 def dataframe_payload(frame: pd.DataFrame) -> bytes:
     text = frame.to_json(
