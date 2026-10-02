@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import io
 import json
 import os
@@ -145,6 +146,205 @@ def download_source(source_key: str, timeout: int = 120) -> tuple[io.BytesIO, di
     return buffer, meta
 
 
+
+def _normalized_values(frame: pd.DataFrame) -> list[list[Any]]:
+    return json.loads(
+        frame.to_json(
+            orient="values",
+            date_format="iso",
+            force_ascii=False,
+        )
+    )
+
+
+def build_normalized_source(
+    source_key: str,
+    file_name: str,
+    raw: bytes,
+) -> tuple[bytes, int]:
+    """Converte Excel/CSV uma única vez para SETTA_SOURCE_V1."""
+    suffix = os.path.splitext(str(file_name or "").lower())[1]
+    sheets: list[dict[str, Any]] = []
+
+    if suffix in {".xlsx", ".xlsm", ".xltx", ".xls"}:
+        engine = "xlrd" if suffix == ".xls" else "openpyxl"
+        book = pd.ExcelFile(io.BytesIO(raw), engine=engine)
+        for index, sheet_name in enumerate(book.sheet_names):
+            frame = pd.read_excel(
+                book,
+                sheet_name=sheet_name,
+                header=None,
+                dtype=object,
+            )
+            sheets.append(
+                {
+                    "index": index,
+                    "name": str(sheet_name),
+                    "rows": _normalized_values(frame),
+                    "row_count": int(len(frame)),
+                    "column_count": int(frame.shape[1]),
+                }
+            )
+    elif suffix == ".csv":
+        frame = pd.read_csv(io.BytesIO(raw), header=None, dtype=object, sep=None, engine="python")
+        sheets.append(
+            {
+                "index": 0,
+                "name": "CSV",
+                "rows": _normalized_values(frame),
+                "row_count": int(len(frame)),
+                "column_count": int(frame.shape[1]),
+            }
+        )
+    else:
+        return b"", 0
+
+    payload = {
+        "format": "SETTA_SOURCE_V1",
+        "source_key": str(source_key),
+        "file_name": str(file_name),
+        "sheets": sheets,
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return gzip.compress(encoded, compresslevel=6), sum(
+        int(sheet["row_count"]) for sheet in sheets
+    )
+
+
+def _upload_normalized_source(
+    source_key: str,
+    normalized: bytes,
+    normalized_rows: int,
+) -> dict:
+    prepared = api_call(
+        "source_normalized_upload_prepare",
+        {"source_key": source_key},
+        timeout=30,
+    )
+    path = str(prepared.get("path") or "")
+    token = str(prepared.get("token") or "")
+    if not path or not token:
+        raise RuntimeError("A Central não autorizou a fonte normalizada.")
+
+    client = create_client(supabase_url(), supabase_key())
+    client.storage.from_(BUCKET).upload_to_signed_url(
+        path=path,
+        token=token,
+        file=normalized,
+    )
+    return {
+        "normalized_storage_path": path,
+        "normalized_format": "SETTA_SOURCE_V1",
+        "normalized_mime_type": "application/gzip",
+        "normalized_rows_count": int(normalized_rows),
+        "normalized_sha256": hashlib.sha256(normalized).hexdigest(),
+    }
+
+
+def download_normalized_source(
+    source_key: str,
+    timeout: int = 120,
+) -> tuple[dict, dict]:
+    meta = api_call(
+        "source_normalized_download",
+        {"source_key": source_key},
+        timeout=30,
+    ).get("data") or {}
+    signed_url = str(meta.get("signed_url") or "")
+    if not signed_url:
+        raise RuntimeError(f"Fonte normalizada {source_key} sem URL de leitura.")
+    response = SESSION.get(signed_url, timeout=timeout)
+    response.raise_for_status()
+    payload = json.loads(gzip.decompress(response.content).decode("utf-8"))
+    if str(payload.get("format") or "") != "SETTA_SOURCE_V1":
+        raise RuntimeError(f"Formato normalizado inválido para {source_key}.")
+    return payload, meta
+
+
+def source_sheet_names(pack: dict) -> list[str]:
+    return [
+        str(sheet.get("name") or "")
+        for sheet in (pack.get("sheets") or [])
+        if isinstance(sheet, dict)
+    ]
+
+
+def _mangle_headers(values: list[Any]) -> list[str]:
+    used: dict[str, int] = {}
+    output: list[str] = []
+    for index, value in enumerate(values):
+        if value is None or (isinstance(value, float) and pd.isna(value)) or str(value).strip() == "":
+            base = f"Unnamed: {index}"
+        else:
+            base = str(value)
+        count = used.get(base, 0)
+        used[base] = count + 1
+        output.append(base if count == 0 else f"{base}.{count}")
+    return output
+
+
+def source_frame(
+    pack: dict,
+    *,
+    sheet_name: str | int | None = 0,
+    header: int | None = 0,
+) -> pd.DataFrame:
+    sheets = [
+        sheet for sheet in (pack.get("sheets") or [])
+        if isinstance(sheet, dict)
+    ]
+    if not sheets:
+        raise ValueError("Pacote normalizado sem planilhas.")
+
+    if isinstance(sheet_name, str):
+        selected = next(
+            (sheet for sheet in sheets if str(sheet.get("name") or "") == sheet_name),
+            None,
+        )
+        if selected is None:
+            raise ValueError(f"A planilha '{sheet_name}' não foi encontrada.")
+    else:
+        index = 0 if sheet_name is None else int(sheet_name)
+        if index < 0 or index >= len(sheets):
+            raise ValueError(f"Índice de planilha inválido: {index}.")
+        selected = sheets[index]
+
+    frame = pd.DataFrame(selected.get("rows") or [])
+    if header is None:
+        return frame
+
+    header_index = int(header)
+    if header_index < 0 or header_index >= len(frame):
+        raise ValueError(f"Linha de cabeçalho inválida: {header_index}.")
+    columns = _mangle_headers(frame.iloc[header_index].tolist())
+    data = frame.iloc[header_index + 1 :].reset_index(drop=True).copy()
+    data.columns = columns
+    return data
+
+
+def download_preferred_source(source_key: str) -> dict:
+    """Usa a representação normalizada e recorre ao Excel apenas em legado."""
+    try:
+        pack, meta = download_normalized_source(source_key)
+        return {
+            "normalized": True,
+            "pack": pack,
+            "meta": meta,
+        }
+    except Exception:
+        raw, meta = download_source(source_key)
+        return {
+            "normalized": False,
+            "raw": raw,
+            "meta": meta,
+        }
+
+
+
 def upload_source(
     source_key: str,
     file_name: str,
@@ -152,6 +352,12 @@ def upload_source(
     rows_count: int = 0,
     mime_type: str = "application/octet-stream",
 ) -> dict:
+    normalized, normalized_rows = build_normalized_source(
+        source_key,
+        file_name,
+        raw,
+    )
+
     prepared = api_call(
         "source_upload_prepare",
         {"source_key": source_key},
@@ -169,6 +375,14 @@ def upload_source(
         file=raw,
     )
 
+    normalized_meta: dict[str, Any] = {}
+    if normalized:
+        normalized_meta = _upload_normalized_source(
+            source_key,
+            normalized,
+            normalized_rows,
+        )
+
     return api_call(
         "source_commit",
         {
@@ -176,10 +390,11 @@ def upload_source(
             "file_name": file_name,
             "mime_type": mime_type,
             "rows_count": int(rows_count),
+            "content_sha256": hashlib.sha256(raw).hexdigest(),
+            **normalized_meta,
         },
         timeout=30,
     ).get("data") or {}
-
 
 def dataframe_payload(frame: pd.DataFrame) -> bytes:
     text = frame.to_json(
