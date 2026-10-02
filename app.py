@@ -129,11 +129,12 @@ def converter_status_html(status_info: dict) -> str:
     status = str(status_info.get("status") or "AGUARDANDO").upper()
     when = fmt_dt(status_info.get("last_update"))
     summary = str(status_info.get("summary") or "").upper()
-    meta = " · ".join(
-        part for part in [when if when != "—" else "", summary] if part
-    )
-    if not meta:
-        meta = "SEM ATUALIZAÇÃO REGISTRADA"
+    parts = []
+    if when != "—":
+        parts.append(f"ÚLTIMA ATUALIZAÇÃO {when}")
+    if summary:
+        parts.append(summary)
+    meta = " · ".join(parts) if parts else "SEM ATUALIZAÇÃO REGISTRADA"
 
     return (
         '<div class="sidebar-status-card">'
@@ -151,6 +152,24 @@ def excel_bytes(frame: pd.DataFrame, sheet_name: str) -> bytes:
         frame.to_excel(writer, sheet_name=sheet_name[:31], index=False)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def ensure_all_bases_ready() -> dict[str, dict]:
+    if st.session_state.get("_mrp_converter_boot_done"):
+        return st.session_state.get("_mrp_converter_boot_results") or {}
+
+    with st.spinner("ATUALIZANDO TODAS AS BASES DO CONVERSOR MRP..."):
+        results = pipelines.sync_all_pipelines(force=False)
+        pipelines.clear_current_frame_cache()
+        warmed = pipelines.warm_all_current_frames(results)
+
+    st.session_state["_mrp_converter_boot_results"] = results
+    st.session_state["_mrp_converter_warmed_rows"] = warmed
+    st.session_state["_mrp_converter_boot_done"] = True
+    return results
+
+
+_BOOT_RESULTS = ensure_all_bases_ready()
 
 
 st.markdown(
@@ -364,8 +383,17 @@ def render_report(report_type: str) -> None:
     cfg = pipelines.config_for(report_type)
 
     try:
-        with st.spinner("Sincronizando com a Central de Dados..."):
-            sync = pipelines.sync_pipeline(report_type)
+        state = pipelines.get_state(report_type)
+        boot_meta = (_BOOT_RESULTS or {}).get(report_type) or {}
+        sync = {
+            **state,
+            "sync_status": (
+                boot_meta.get("sync_status")
+                or ("ATUALIZADO" if state.get("ready") and not state.get("stale") else "AGUARDANDO")
+            ),
+            "result": None,
+            "error": boot_meta.get("error") or "",
+        }
     except Exception as exc:
         sync = {
             "config": cfg,
@@ -398,13 +426,8 @@ def render_report(report_type: str) -> None:
         )
     elif sync_status == "PROCESSADO":
         st.success(f'{cfg["derived_name"]} ATUALIZADA AUTOMATICAMENTE.')
-        try:
-            _converter_status_placeholder.markdown(
-                converter_status_html(converter_general_status()),
-                unsafe_allow_html=True,
-            )
-        except Exception:
-            pass
+    elif sync_status == "ATUALIZADO":
+        st.caption(f'{cfg["derived_name"]} JÁ ESTÁ ATUALIZADA.')
 
     result = sync.get("result")
     derived_meta = sync.get("derived") or {}
