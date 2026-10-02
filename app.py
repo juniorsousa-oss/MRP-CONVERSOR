@@ -215,9 +215,16 @@ st.markdown(
       margin-top:3px!important;font-size:12px!important;line-height:16px!important;color:#6b7280;
     }
     .sidebar-section-label{
-      margin:0 0 8px 0!important;color:#374151;
+      margin:0!important;color:#374151;
       font-size:12px!important;line-height:15px!important;font-weight:800!important;
       text-transform:uppercase;letter-spacing:.055em;
+    }
+    /* Espaço real entre título da seção e o próximo componente:
+       NAVEGAÇÃO -> 1º botão = 8 px
+       STATUS GERAL -> cartão = 8 px */
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.sidebar-section-label){
+      margin-top:0!important;
+      margin-bottom:8px!important;
     }
     .sidebar-info-card{
       background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;
