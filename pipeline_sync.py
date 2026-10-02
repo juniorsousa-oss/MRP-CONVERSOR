@@ -302,6 +302,32 @@ def clear_current_frame_cache() -> None:
     _cached_current_frame.clear()
 
 
+def sync_all_pipelines(force: bool = False) -> dict[str, dict]:
+    results: dict[str, dict] = {}
+    for report_type in PIPELINES:
+        sync = sync_pipeline(report_type, force=force)
+        results[report_type] = {
+            "sync_status": str(sync.get("sync_status") or ""),
+            "error": str(sync.get("error") or ""),
+            "derived": sync.get("derived") or {},
+            "stale": bool(sync.get("stale")),
+            "ready": bool(sync.get("ready")),
+        }
+    return results
+
+
+def warm_all_current_frames(results: dict[str, dict] | None = None) -> dict[str, int]:
+    warmed: dict[str, int] = {}
+    for report_type in PIPELINES:
+        try:
+            meta = ((results or {}).get(report_type) or {}).get("derived") or {}
+            frame, _ = current_frame(report_type, derived_meta=meta)
+            warmed[report_type] = int(len(frame)) if isinstance(frame, pd.DataFrame) else 0
+        except Exception:
+            warmed[report_type] = 0
+    return warmed
+
+
 def source_label(report_type: str, source_key: str) -> str:
     cfg = config_for(report_type)
     return str((cfg.get("labels") or {}).get(source_key) or source_key.upper())
