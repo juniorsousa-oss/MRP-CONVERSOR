@@ -197,10 +197,11 @@ st.markdown(
       box-sizing:border-box!important;
       padding-top:26px!important;padding-left:16px!important;padding-right:16px!important;
     }
-    /* Remove o gap vertical automático do Streamlit na raiz da sidebar.
-       A partir daqui, todos os espaçamentos do menu são definidos em px pelo padrão SETTA. */
-    section[data-testid="stSidebar"] .block-container > div[data-testid="stVerticalBlock"]{
+    /* Remove os gaps verticais automáticos do Streamlit em todos os blocos internos da sidebar.
+       A partir daqui, o espaçamento visual é controlado apenas pelo padrão SETTA. */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
       gap:0!important;
+      row-gap:0!important;
     }
     .sidebar-brand{
       background:#f8fafc;border:1px solid #e5e8ee;border-radius:12px;
@@ -258,9 +259,9 @@ st.markdown(
     }
 
     /* Último botão -> linha = 20 px.
-       O último botão já deixa 8 px; o HR completa os 12 px restantes. */
+       O botão deixa 2 px; o divisor completa os 18 px restantes. */
     section[data-testid="stSidebar"] hr{
-      margin:12px 0 20px 0!important;
+      margin:18px 0 20px 0!important;
     }
     .sidebar-status-spacer{
       display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;
@@ -286,8 +287,9 @@ st.markdown(
       margin-top:6px!important;color:#6b7280;font-size:11px!important;
       line-height:15px!important;text-transform:uppercase;
     }
-    /* O container do último botão mantém os 8 px previstos antes do complemento do divisor. */
-    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(+ div[data-testid="stElementContainer"] hr){
+    /* Containers dos botões não acrescentam margem própria além dos 2 px definidos acima. */
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(div[data-testid="stButton"]){
+      margin-top:0!important;
       margin-bottom:0!important;
     }
     [data-testid="stAppViewContainer"] > .main,
