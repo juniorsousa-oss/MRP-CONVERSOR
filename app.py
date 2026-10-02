@@ -120,27 +120,37 @@ def converter_general_status() -> dict:
     return {
         "status": status,
         "last_update": last_update,
+        "updated": updated,
+        "total": total,
         "summary": f"{updated}/{total} BASES OK",
     }
 
 
 def converter_status_html(status_info: dict) -> str:
     status_info = status_info or {}
-    status = str(status_info.get("status") or "AGUARDANDO").upper()
+    raw_status = str(status_info.get("status") or "AGUARDANDO").upper()
     when = fmt_dt(status_info.get("last_update"))
-    summary = str(status_info.get("summary") or "").upper()
-    parts = []
-    if when != "—":
-        parts.append(f"ÚLTIMA ATUALIZAÇÃO {when}")
-    if summary:
-        parts.append(summary)
-    meta = " · ".join(parts) if parts else "SEM ATUALIZAÇÃO REGISTRADA"
+    updated = int(status_info.get("updated") or 0)
+    total = int(status_info.get("total") or len(pipelines.PIPELINES))
+
+    if raw_status == "ATUALIZADO":
+        status_class = "status-ok"
+        status_label = "ATUALIZADO"
+    elif raw_status == "ERRO":
+        status_class = "status-error"
+        status_label = "ERRO"
+    else:
+        status_class = "status-warning"
+        status_label = "ATENÇÃO"
 
     return (
         '<div class="sidebar-status-card">'
         '<div class="sidebar-status-name">CONVERSOR MRP</div>'
-        f'<div class="sidebar-status-value">{status}</div>'
-        f'<div class="sidebar-status-meta">{meta}</div>'
+        f'<div class="sidebar-status-value {status_class}">{status_label}</div>'
+        '<div class="sidebar-status-meta">'
+        f'<div>ÚLTIMA ATUALIZAÇÃO: {when}</div>'
+        f'<div>QNT DE BASES: {updated}/{total}</div>'
+        '</div>'
         '</div>'
     )
 
@@ -180,27 +190,101 @@ st.markdown(
     .block-container{max-width:1780px!important;padding-top:3.2rem!important;padding-left:2.7rem!important;padding-right:2.7rem!important;padding-bottom:3rem!important;width:100%!important}
     section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important;width:260px!important;min-width:260px!important;max-width:260px!important;flex:0 0 260px!important;flex-basis:260px!important;overflow:hidden!important}
     section[data-testid="stSidebar"]>div{width:260px!important;min-width:260px!important;max-width:260px!important;box-sizing:border-box!important}
-    section[data-testid="stSidebar"] .block-container{width:260px!important;min-width:260px!important;max-width:260px!important;box-sizing:border-box!important;padding-top:1.6rem!important;padding-left:1rem!important;padding-right:1rem!important}
-    .sidebar-brand{background:#f8fafc;border:1px solid #e5e8ee;border-radius:12px;padding:.9rem 1rem;margin:0 0 1.05rem 0}
-    .sidebar-brand-title{font-size:.92rem;font-weight:800;color:#111827;letter-spacing:-.01em}
-    .sidebar-brand-sub{margin-top:.18rem;font-size:.75rem;color:#6b7280}
-    .sidebar-section-label{margin:.25rem 0 .45rem 0;color:#374151;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em}
-    .sidebar-info-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.76rem;line-height:1.55}
-    section[data-testid="stSidebar"] div[data-testid="stButton"]{margin:0!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button{position:relative!important;min-height:42px!important;justify-content:flex-start!important;text-align:left!important;padding:.56rem .72rem .56rem calc(.88rem + 10px)!important;border-radius:10px!important;font-size:.83rem!important;font-weight:600!important;line-height:1.2!important;width:100%!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button > div{width:100%!important;text-align:left!important;justify-content:flex-start!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button p{width:100%!important;margin:0!important;text-align:left!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]{background:transparent!important;border:1px solid transparent!important;color:#374151!important;box-shadow:none!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]:hover{background:#f8fafc!important;border-color:#e5e7eb!important;color:#111827!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"]{background:#111827!important;border:1px solid #111827!important;color:#fff!important;box-shadow:0 5px 14px rgba(17,24,39,.14)!important;font-weight:700!important}
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"]::before{content:"";position:absolute;left:.42rem;top:50%;width:4px;height:20px;border-radius:999px;background:#ef4444;transform:translateY(-50%)}
-    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(div[data-testid="stButton"]){margin-bottom:-.45rem!important}
-    .sidebar-status-spacer{height:.6rem!important;min-height:.6rem!important}
-    .sidebar-status-card{background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;padding:.75rem .85rem;color:#6b7280;font-size:.72rem;line-height:1.5}
-    .sidebar-status-name{font-size:.68rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.025em}
-    .sidebar-status-value{margin-top:.16rem;font-size:.8rem;font-weight:900;color:#111827;text-transform:uppercase}
-    .sidebar-status-meta{margin-top:.24rem;color:#6b7280;font-size:.66rem;line-height:1.45;text-transform:uppercase}
-    section[data-testid="stSidebar"] hr{margin:.85rem 0!important}
+    /* PADRÃO SETTA · MENU LATERAL
+       26 / 20 / 8 / 42 / 8 / 20 / 20 / 8 px */
+    section[data-testid="stSidebar"] .block-container{
+      width:260px!important;min-width:260px!important;max-width:260px!important;
+      box-sizing:border-box!important;
+      padding-top:26px!important;padding-left:16px!important;padding-right:16px!important;
+    }
+    .sidebar-brand{
+      background:#f8fafc;border:1px solid #e5e8ee;border-radius:12px;
+      padding:14px 16px!important;margin:0 0 20px 0!important;
+    }
+    .sidebar-brand-title{
+      font-size:15px!important;font-weight:800!important;line-height:18px!important;
+      color:#111827;letter-spacing:-.01em;
+    }
+    .sidebar-brand-sub{
+      margin-top:3px!important;font-size:12px!important;line-height:16px!important;color:#6b7280;
+    }
+    .sidebar-section-label{
+      margin:0 0 8px 0!important;color:#374151;
+      font-size:12px!important;line-height:15px!important;font-weight:800!important;
+      text-transform:uppercase;letter-spacing:.055em;
+    }
+    .sidebar-info-card{
+      background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;
+      padding:12px 14px;color:#6b7280;font-size:12px;line-height:1.55;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"]{
+      margin:0 0 8px 0!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button{
+      position:relative!important;
+      height:42px!important;min-height:42px!important;max-height:42px!important;
+      justify-content:flex-start!important;text-align:left!important;
+      padding:0 12px 0 24px!important;border-radius:10px!important;
+      font-size:13px!important;font-weight:500!important;line-height:16px!important;width:100%!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button > div{
+      width:100%!important;text-align:left!important;justify-content:flex-start!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button p{
+      width:100%!important;margin:0!important;text-align:left!important;
+      font-size:13px!important;line-height:16px!important;font-weight:500!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]{
+      background:transparent!important;border:1px solid transparent!important;color:#374151!important;box-shadow:none!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"]:hover{
+      background:#f8fafc!important;border-color:#e5e7eb!important;color:#111827!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"]{
+      background:#111827!important;border:1px solid #111827!important;color:#fff!important;
+      box-shadow:0 5px 14px rgba(17,24,39,.14)!important;font-weight:700!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] p{
+      font-weight:700!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"]::before{
+      content:"";position:absolute;left:7px;top:50%;width:4px;height:20px;border-radius:999px;
+      background:#ef4444;transform:translateY(-50%);
+    }
+
+    /* Último botão -> linha = 20 px.
+       O último botão já deixa 8 px; o HR completa os 12 px restantes. */
+    section[data-testid="stSidebar"] hr{
+      margin:12px 0 20px 0!important;
+    }
+    .sidebar-status-spacer{
+      display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;
+    }
+
+    /* STATUS GERAL -> cartão = 8 px, herdado do label. */
+    .sidebar-status-card{
+      background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;
+      padding:12px 14px;color:#6b7280;font-size:11px;line-height:15px;
+    }
+    .sidebar-status-name{
+      font-size:11px!important;line-height:14px!important;font-weight:800!important;
+      color:#64748b;text-transform:uppercase;letter-spacing:.025em;
+    }
+    .sidebar-status-value{
+      margin-top:4px!important;font-size:13px!important;line-height:16px!important;
+      font-weight:900!important;text-transform:uppercase;
+    }
+    .sidebar-status-value.status-ok{color:#16a34a!important}
+    .sidebar-status-value.status-warning{color:#f59e0b!important}
+    .sidebar-status-value.status-error{color:#ef4444!important}
+    .sidebar-status-meta{
+      margin-top:6px!important;color:#6b7280;font-size:11px!important;
+      line-height:15px!important;text-transform:uppercase;
+    }
+    /* O container do último botão mantém os 8 px previstos antes do complemento do divisor. */
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(+ div[data-testid="stElementContainer"] hr){
+      margin-bottom:0!important;
+    }
     [data-testid="stAppViewContainer"] > .main,
     [data-testid="stAppViewContainer"] .main,
     [data-testid="stMain"],
