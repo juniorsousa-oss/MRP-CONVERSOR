@@ -218,7 +218,7 @@ st.markdown(
       padding:12px 14px;color:#6b7280;font-size:12px;line-height:1.55;
     }
     section[data-testid="stSidebar"] div[data-testid="stButton"]{
-      margin:0 0 8px 0!important;
+      margin:0 0 4px 0!important;
     }
     section[data-testid="stSidebar"] div[data-testid="stButton"] button{
       position:relative!important;
