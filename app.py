@@ -216,9 +216,8 @@ st.markdown(
     }
     .sidebar-section-label{
       display:block!important;
-      box-sizing:content-box!important;
       margin:0!important;
-      padding:0 0 8px 0!important;
+      padding:0!important;
       color:#374151;
       font-size:12px!important;
       line-height:15px!important;
@@ -226,12 +225,27 @@ st.markdown(
       text-transform:uppercase;
       letter-spacing:.055em;
     }
-    /* O espaço de 8 px pertence ao próprio título, evitando colapso de margem
-       pelos containers internos do Streamlit. */
-    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.sidebar-section-label){
+    .sidebar-section-gap{
+      display:block!important;
+      width:100%!important;
+      height:8px!important;
+      min-height:8px!important;
       margin:0!important;
       padding:0!important;
-      min-height:23px!important;
+    }
+    .sidebar-divider{
+      display:block!important;
+      width:100%!important;
+      height:1px!important;
+      min-height:1px!important;
+      background:#d1d5db!important;
+      margin:18px 0 20px 0!important;
+      padding:0!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.sidebar-section-label),
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.sidebar-divider){
+      margin:0!important;
+      padding:0!important;
     }
     .sidebar-info-card{
       background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;
@@ -272,16 +286,7 @@ st.markdown(
       background:#ef4444;transform:translateY(-50%);
     }
 
-    /* Último botão -> linha = 20 px.
-       O botão deixa 2 px; o divisor completa os 18 px restantes. */
-    section[data-testid="stSidebar"] hr{
-      margin:18px 0 20px 0!important;
-    }
-    .sidebar-status-spacer{
-      display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;
-    }
-
-    /* STATUS GERAL -> cartão = 8 px, herdado do label. */
+    /* STATUS GERAL -> cartão = 8 px pelo spacer explícito. */
     .sidebar-status-card{
       background:#f8fafc;border:1px solid #e5e8ee;border-radius:10px;
       padding:12px 14px;color:#6b7280;font-size:11px;line-height:15px;
@@ -395,7 +400,8 @@ with st.sidebar:
         '<div class="sidebar-brand-title">CONVERSOR MRP</div>'
         '<div class="sidebar-brand-sub">Central de Dados SETTA</div>'
         '</div>'
-        '<div class="sidebar-section-label">NAVEGAÇÃO</div>',
+        '<div class="sidebar-section-label">NAVEGAÇÃO</div>'
+        '<div class="sidebar-section-gap"></div>',
         unsafe_allow_html=True,
     )
 
@@ -411,13 +417,10 @@ with st.sidebar:
             args=(_key,),
         )
 
-    st.divider()
     st.markdown(
-        '<div class="sidebar-status-spacer"></div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="sidebar-section-label">STATUS GERAL</div>',
+        '<div class="sidebar-divider"></div>'
+        '<div class="sidebar-section-label">STATUS GERAL</div>'
+        '<div class="sidebar-section-gap"></div>',
         unsafe_allow_html=True,
     )
     _converter_status_placeholder = st.empty()
