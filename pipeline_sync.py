@@ -114,33 +114,57 @@ def get_state(report_type: str) -> dict:
     }
 
 
-def _download_sources(cfg: dict) -> dict[str, io.BytesIO]:
+def _download_sources(cfg: dict) -> dict[str, dict]:
     keys = list(cfg["sources"])
-    files: dict[str, io.BytesIO] = {}
+    files: dict[str, dict] = {}
 
     with ThreadPoolExecutor(max_workers=min(4, len(keys))) as executor:
         futures = {
-            executor.submit(central.download_source, key): key
+            executor.submit(central.download_preferred_source, key): key
             for key in keys
         }
         for future in as_completed(futures):
             key = futures[future]
-            file_obj, _ = future.result()
-            files[key] = file_obj
+            files[key] = future.result()
 
     return files
 
 
-def _process(report_type: str, files: dict[str, io.BytesIO]) -> dict:
+def _source_frame(source: dict, **kwargs) -> pd.DataFrame:
+    if source.get("normalized"):
+        allowed = {
+            "sheet_name": kwargs.get("sheet_name", 0),
+            "header": kwargs.get("header", 0),
+        }
+        return central.source_frame(source["pack"], **allowed)
+
+    file_obj = source["raw"]
+    return read_excel_safe(file_obj, **kwargs)
+
+
+def _source_sheet_names(source: dict) -> list[str]:
+    if source.get("normalized"):
+        return central.source_sheet_names(source["pack"])
+    file_obj = source["raw"]
+    excel = pd.ExcelFile(file_obj)
+    names = list(excel.sheet_names)
+    try:
+        file_obj.seek(0)
+    except Exception:
+        pass
+    return names
+
+
+def _process(report_type: str, files: dict[str, dict]) -> dict:
     if report_type == "Relatório Geral":
-        bruto = read_excel_safe(files["relatorio_geral"], sheet_name="Geral")
-        for001 = read_excel_safe(files["for001"], sheet_name="PAINEL", header=4)
-        for022 = read_excel_safe(files["for022"], sheet_name="Datas esperadas", header=0)
+        bruto = _source_frame(files["relatorio_geral"], sheet_name="Geral")
+        for001 = _source_frame(files["for001"], sheet_name="PAINEL", header=4)
+        for022 = _source_frame(files["for022"], sheet_name="Datas esperadas", header=0)
         return processar_relatorio_geral(bruto, for001, for022)
 
     if report_type == "Saldo em Estoque":
-        analitico = read_excel_safe(files["analitico"], header=1)
-        endereco = read_excel_safe(files["endereco"], header=1)
+        analitico = _source_frame(files["analitico"], header=1)
+        endereco = _source_frame(files["endereco"], header=1)
         return processar_estoque(
             analitico,
             endereco,
@@ -148,24 +172,19 @@ def _process(report_type: str, files: dict[str, io.BytesIO]) -> dict:
         )
 
     if report_type == "Compras — S.C + P.C + Pré-nota":
-        sc = read_excel_safe(files["sc"], header=1)
+        sc = _source_frame(files["sc"], header=1)
 
-        pc_file = files["pc"]
-        excel_pc = pd.ExcelFile(pc_file)
+        pc_source = files["pc"]
         sheet = "2-Pedido de Compras   Autoriz"
-        if sheet not in excel_pc.sheet_names:
+        if sheet not in _source_sheet_names(pc_source):
             raise ValueError(f"A planilha '{sheet}' não foi encontrada no P.C.")
-        try:
-            pc_file.seek(0)
-        except Exception:
-            pass
-        pc = read_excel_safe(pc_file, sheet_name=sheet, header=1)
-        pre_nota = read_excel_safe(files["pre_nota"], header=1)
+        pc = _source_frame(pc_source, sheet_name=sheet, header=1)
+        pre_nota = _source_frame(files["pre_nota"], header=1)
         return processar_compras(sc, pc, pre_nota)
 
     if report_type == "MRP — TC/TP":
-        pmp = read_excel_safe(files["pmp"])
-        h001 = read_excel_safe(files["h001"])
+        pmp = _source_frame(files["pmp"])
+        h001 = _source_frame(files["h001"])
         return processar_tc_tp(pmp, h001)
 
     raise KeyError(report_type)
