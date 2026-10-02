@@ -197,6 +197,11 @@ st.markdown(
       box-sizing:border-box!important;
       padding-top:26px!important;padding-left:16px!important;padding-right:16px!important;
     }
+    /* Remove o gap vertical automático do Streamlit na raiz da sidebar.
+       A partir daqui, todos os espaçamentos do menu são definidos em px pelo padrão SETTA. */
+    section[data-testid="stSidebar"] .block-container > div[data-testid="stVerticalBlock"]{
+      gap:0!important;
+    }
     .sidebar-brand{
       background:#f8fafc;border:1px solid #e5e8ee;border-radius:12px;
       padding:14px 16px!important;margin:0 0 20px 0!important;
