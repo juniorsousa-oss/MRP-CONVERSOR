@@ -1,0 +1,45 @@
+name: Validar fontes normalizadas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "central_data.py"
+      - "pipeline_sync.py"
+      - "conversores/**"
+      - ".github/workflows/normalized-source-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  normalized-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Processar todas as fontes normalizadas
+        run: |
+          python - <<'PY'
+          import pipeline_sync as pipelines
+
+          for report_type, cfg in pipelines.PIPELINES.items():
+              files = pipelines._download_sources(cfg)
+              assert files, report_type
+              assert all(item.get("normalized") is True for item in files.values()), {
+                  key: item.get("normalized") for key, item in files.items()
+              }
+
+              result = pipelines._process(report_type, files)
+              errors = list(result.get("erros") or [])
+              assert not errors, f"{report_type}: {errors[:10]}"
+              treated = result.get("tratado")
+              assert treated is not None and not treated.empty, report_type
+              print(report_type, len(treated))
+
+          print("NORMALIZED_SOURCE_SMOKE_OK")
+          PY
