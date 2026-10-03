@@ -31,11 +31,7 @@ DEFAULT_SETTA_UI_CONFIG = {
         "margin_bottom": 24,
     },
     "top_actions": {
-        "show_github": True,
         "show_more": True,
-        "show_share": False,
-        "show_favorite": False,
-        "show_edit": False,
     },
     "theme": {
         "lock_light": True,
@@ -88,47 +84,9 @@ def _css_color(value, default: str) -> str:
 
 
 def top_actions_css(config: dict) -> str:
-    selectors = []
-    if not bool(config.get("show_share", False)):
-        selectors += [
-            '[data-testid="stToolbar"] button[aria-label*="Share" i]',
-            '[data-testid="stToolbar"] a[aria-label*="Share" i]',
-            '[data-testid="stToolbar"] button[title*="Share" i]',
-            '[data-testid="stToolbar"] a[title*="Share" i]',
-            '[data-testid="stToolbar"] [data-testid*="share" i]',
-        ]
-    if not bool(config.get("show_favorite", False)):
-        selectors += [
-            '[data-testid="stToolbar"] button[aria-label*="Favorite" i]',
-            '[data-testid="stToolbar"] a[aria-label*="Favorite" i]',
-            '[data-testid="stToolbar"] button[title*="Favorite" i]',
-            '[data-testid="stToolbar"] a[title*="Favorite" i]',
-            '[data-testid="stToolbar"] button[aria-label*="Star" i]',
-            '[data-testid="stToolbar"] a[aria-label*="Star" i]',
-            '[data-testid="stToolbar"] [data-testid*="favorite" i]',
-        ]
-    if not bool(config.get("show_edit", False)):
-        selectors += [
-            '[data-testid="stToolbar"] button[aria-label*="Edit" i]',
-            '[data-testid="stToolbar"] a[aria-label*="Edit" i]',
-            '[data-testid="stToolbar"] button[title*="Edit" i]',
-            '[data-testid="stToolbar"] a[title*="Edit" i]',
-            '[data-testid="stToolbar"] [data-testid*="edit" i]',
-        ]
-    if not bool(config.get("show_github", True)):
-        selectors += [
-            '[data-testid="stToolbar"] a[href*="github.com"]',
-            '[data-testid="stToolbar"] button[aria-label*="GitHub" i]',
-            '[data-testid="stToolbar"] a[aria-label*="GitHub" i]',
-        ]
-    if not bool(config.get("show_more", True)):
-        selectors += [
-            '#MainMenu',
-            '[data-testid="stToolbar"] button[aria-label*="menu" i]',
-        ]
-    if not selectors:
+    if bool(config.get("show_more", True)):
         return ""
-    return ",\n".join(selectors) + "{display:none!important;}"
+    return "#MainMenu{display:none!important;}"
 
 
 def browser_icon():
@@ -1072,27 +1030,15 @@ def render_status_api() -> None:
                 step=2,
             )
 
-            st.markdown("**BOTÕES SUPERIORES**")
-            a1, a2, a3, a4, a5 = st.columns(5)
-            show_github = a1.checkbox(
-                "GITHUB",
-                value=bool(TOP_ACTIONS_CONFIG.get("show_github", True)),
-            )
-            show_more = a2.checkbox(
-                "3 PONTOS",
+            st.markdown("**AÇÕES SUPERIORES**")
+            show_more = st.checkbox(
+                "EXIBIR MENU DE 3 PONTOS",
                 value=bool(TOP_ACTIONS_CONFIG.get("show_more", True)),
             )
-            show_share = a3.checkbox(
-                "SHARE",
-                value=bool(TOP_ACTIONS_CONFIG.get("show_share", False)),
-            )
-            show_favorite = a4.checkbox(
-                "FAVORITO",
-                value=bool(TOP_ACTIONS_CONFIG.get("show_favorite", False)),
-            )
-            show_edit = a5.checkbox(
-                "EDITAR",
-                value=bool(TOP_ACTIONS_CONFIG.get("show_edit", False)),
+            st.caption(
+                "No Streamlit Community Cloud, SHARE, FAVORITO, EDITAR e "
+                "GITHUB pertencem à barra externa da plataforma. O aplicativo "
+                "não consegue ocultá-los individualmente pelo CSS do app."
             )
 
             st.markdown("**TEMA**")
@@ -1120,11 +1066,7 @@ def render_status_api() -> None:
                     "margin_bottom": int(margin_bottom),
                 },
                 "top_actions": {
-                    "show_github": bool(show_github),
                     "show_more": bool(show_more),
-                    "show_share": bool(show_share),
-                    "show_favorite": bool(show_favorite),
-                    "show_edit": bool(show_edit),
                 },
                 "theme": {
                     **THEME_CONFIG,
