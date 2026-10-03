@@ -104,12 +104,42 @@ def browser_icon():
     return "📊"
 
 
+def _setta_sidebar_initial_state():
+    """Estado inicial/forçado da sidebar sem substituir o controle nativo."""
+    close_stage = int(
+        st.session_state.get("_setta_sidebar_close_stage") or 0
+    )
+    if close_stage == 1:
+        # Primeira fase: força uma transição reconhecível pelo frontend.
+        return "expanded"
+    if close_stage == 2:
+        # Segunda fase: fecha a sidebar após a seleção do módulo.
+        return "collapsed"
+    if not st.session_state.get("_setta_sidebar_bootstrapped"):
+        st.session_state["_setta_sidebar_bootstrapped"] = True
+        return "collapsed"
+    # Depois do bootstrap, preserve a escolha manual do operador.
+    return None
+
+
+_SETTA_SIDEBAR_STATE = _setta_sidebar_initial_state()
+
 st.set_page_config(
     page_title="CONVERSOR MRP | SETTA",
     page_icon=browser_icon(),
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state=_SETTA_SIDEBAR_STATE,
 )
+
+# SETTA UI — Sidebar Auto-Close V1
+# Quando um botão de navegação pede fechamento, fazemos uma transição
+# expanded -> collapsed em dois reruns leves. O Load Once impede qualquer
+# nova carga das bases durante essa operação.
+if int(st.session_state.get("_setta_sidebar_close_stage") or 0) == 1:
+    st.session_state["_setta_sidebar_close_stage"] = 2
+    st.rerun()
+elif int(st.session_state.get("_setta_sidebar_close_stage") or 0) == 2:
+    st.session_state["_setta_sidebar_close_stage"] = 0
 
 
 def load_logo():
@@ -624,6 +654,9 @@ def current_nav_key() -> str:
 def set_nav_key(key: str) -> None:
     if key in NAV_OPTIONS:
         st.session_state["_mrp_conversor_nav"] = key
+        # O operador abre a sidebar, escolhe o módulo e ela fecha novamente.
+        # O botão nativo de abrir/fechar permanece disponível.
+        st.session_state["_setta_sidebar_close_stage"] = 1
 
 
 with st.sidebar:
