@@ -284,41 +284,70 @@ st.markdown(
       transform:translateY(-50%)!important;
     }
 
-    /* SETTA UI — Sidebar Operacional V1: botões nativos, sem ?nav= */
-    section[data-testid="stSidebar"] div[data-testid="stButton"]{
+    /* SETTA UI — Sidebar Operacional V1 · navegação nativa */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{
+      gap:0!important;row-gap:0!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.sidebar-section-label){
       margin:0!important;padding:0!important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button{
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"]{
+      margin:0 0 2px 0!important;
+      padding:0!important;
+    }
+    section[data-testid="stSidebar"] .st-key-setta_nav_0{
+      margin-top:8px!important;
+    }
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button{
       position:relative!important;
       width:100%!important;
-      height:42px!important;min-height:42px!important;max-height:42px!important;
-      justify-content:flex-start!important;
-      text-align:left!important;
+      min-height:42px!important;height:42px!important;max-height:42px!important;
       margin:0!important;
       padding:0 12px 0 24px!important;
       border-radius:10px!important;
-      font-size:13px!important;line-height:16px!important;
+      justify-content:flex-start!important;
+      text-align:left!important;
       box-shadow:none!important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button p{
-      margin:0!important;width:100%!important;text-align:left!important;
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button > div{
+      width:100%!important;
+      justify-content:flex-start!important;
+      text-align:left!important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="secondary"]{
-      background:transparent!important;border:1px solid transparent!important;
-      color:#374151!important;font-weight:500!important;
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button p{
+      width:100%!important;
+      margin:0!important;
+      padding:0!important;
+      text-align:left!important;
+      font-size:13px!important;
+      line-height:16px!important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="secondary"]:hover{
-      background:#f8fafc!important;border-color:#e5e7eb!important;color:#111827!important;
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button[data-testid="stBaseButton-secondary"]{
+      background:transparent!important;
+      border:1px solid transparent!important;
+      color:#374151!important;
+      font-weight:500!important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primary"]{
-      background:#111827!important;border:1px solid #111827!important;
-      color:#fff!important;font-weight:700!important;
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button[data-testid="stBaseButton-secondary"]:hover{
+      background:#f8fafc!important;
+      border-color:#e5e7eb!important;
+      color:#111827!important;
+    }
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button[data-testid="stBaseButton-primary"]{
+      background:#111827!important;
+      border:1px solid #111827!important;
+      color:#fff!important;
+      font-weight:700!important;
       box-shadow:0 5px 14px rgba(17,24,39,.14)!important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primary"]::before{
-      content:""!important;position:absolute!important;left:7px!important;top:50%!important;
-      width:4px!important;height:20px!important;border-radius:999px!important;
-      background:#ef4444!important;transform:translateY(-50%)!important;
+    section[data-testid="stSidebar"] [class*="st-key-setta_nav_"] button[data-testid="stBaseButton-primary"]::before{
+      content:""!important;
+      position:absolute!important;
+      left:7px!important;top:50%!important;
+      width:4px!important;height:20px!important;
+      border-radius:999px!important;
+      background:#ef4444!important;
+      transform:translateY(-50%)!important;
     }
 
     .sidebar-divider{
@@ -326,7 +355,7 @@ st.markdown(
       width:100%!important;
       height:1px!important;min-height:1px!important;
       background:#d1d5db!important;
-      margin:20px 0!important;
+      margin:18px 0 20px 0!important;
       padding:0!important;
     }
 
@@ -463,7 +492,9 @@ with st.sidebar:
             args=(_key,),
         )
 
-    _status_html = converter_status_html(_BOOT_RESULTS)
+    _status_html = converter_status_html(
+        converter_general_status(_BOOT_RESULTS)
+    )
     st.markdown(
         '<div class="sidebar-divider"></div>'
         '<div class="sidebar-section-label">STATUS GERAL</div>'
