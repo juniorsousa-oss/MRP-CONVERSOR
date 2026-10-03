@@ -305,7 +305,20 @@ st.markdown(
     """
     <style>
     [data-testid="stAppViewContainer"]{background:#f4f7fb!important}
-    [data-testid="stHeader"]{background:rgba(255,255,255,.96)!important}
+    /* SETTA UI — Chrome Clean V1
+       O drawer e as ações superiores agora pertencem ao app. */
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    header[data-testid="stHeader"]{
+      display:none!important;
+      visibility:hidden!important;
+      height:0!important;
+      min-height:0!important;
+      max-height:0!important;
+      margin:0!important;
+      padding:0!important;
+    }
     .block-container{max-width:1780px!important;padding-top:3.2rem!important;padding-left:2.7rem!important;padding-right:2.7rem!important;padding-bottom:3rem!important;width:100%!important}
     section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important;width:260px!important;min-width:260px!important;max-width:260px!important;flex:0 0 260px!important;flex-basis:260px!important;overflow:hidden!important}
     section[data-testid="stSidebar"]>div{width:260px!important;min-width:260px!important;max-width:260px!important;box-sizing:border-box!important}
@@ -615,8 +628,7 @@ if bool(THEME_CONFIG.get("lock_light", True)):
       background:{_app_background}!important;
       color:{_text_color}!important;
     }}
-    section[data-testid="stSidebar"],
-    [data-testid="stHeader"]{{
+    section[data-testid="stSidebar"]{{
       background:{_surface_background}!important;
       color:{_text_color}!important;
     }}
@@ -712,9 +724,9 @@ with st.sidebar:
 
 
 # SETTA UI — Top Controls V1
-# Estes controles pertencem ao app e funcionam também em ?embed=true.
-_menu_col, _top_space, _github_col, _more_col = st.columns(
-    [0.7, 8.6, 1.2, 0.7],
+# A barra nativa foi removida. Permanecem somente os controles SETTA.
+_menu_col, _top_space, _more_col = st.columns(
+    [0.7, 9.1, 0.7],
     vertical_alignment="center",
 )
 with _menu_col:
@@ -725,12 +737,6 @@ with _menu_col:
         use_container_width=True,
         on_click=_setta_toggle_sidebar,
     )
-with _github_col:
-    st.link_button(
-        "GITHUB",
-        "https://github.com/juniorsousa-oss/MRP-CONVERSOR",
-        use_container_width=True,
-    )
 with _more_col:
     with st.popover("⋮", use_container_width=True):
         st.button(
@@ -739,11 +745,6 @@ with _more_col:
             use_container_width=True,
             on_click=set_nav_key,
             args=("configuracoes",),
-        )
-        st.markdown(
-            '<a href="?embed=true&embed_options=light_theme" '
-            'target="_self" style="text-decoration:none">MODO SETTA LIMPO</a>',
-            unsafe_allow_html=True,
         )
 
 
@@ -1122,12 +1123,6 @@ def render_status_api() -> None:
                 "EXIBIR MENU DE 3 PONTOS",
                 value=bool(TOP_ACTIONS_CONFIG.get("show_more", True)),
             )
-            st.caption(
-                "No Streamlit Community Cloud, SHARE, FAVORITO, EDITAR e "
-                "GITHUB pertencem à barra externa da plataforma. O aplicativo "
-                "não consegue ocultá-los individualmente pelo CSS do app."
-            )
-
             st.markdown("**TEMA**")
             lock_light = st.checkbox(
                 "TRAVAR A INTERFACE NO TEMA LIGHT",
