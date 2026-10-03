@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
@@ -254,6 +253,20 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
             "published": published,
         }
     except Exception as exc:
+        error_text = str(exc)
+        if "aguardando normalização" in error_text.lower():
+            central.pipeline_finish(
+                run_id,
+                "AGUARDANDO",
+                message=error_text,
+            )
+            return {
+                **state,
+                "sync_status": "AGUARDANDO",
+                "result": None,
+                "error": error_text,
+            }
+
         central.pipeline_finish(
             run_id,
             "ERRO",
@@ -263,7 +276,7 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
             **state,
             "sync_status": "ERRO",
             "result": None,
-            "error": str(exc),
+            "error": error_text,
         }
 
 
@@ -381,15 +394,3 @@ def warm_all_current_frames(results: dict[str, dict] | None = None) -> dict[str,
 def source_label(report_type: str, source_key: str) -> str:
     cfg = config_for(report_type)
     return str((cfg.get("labels") or {}).get(source_key) or source_key.upper())
-
-
-def count_rows(file_name: str, raw: bytes) -> int:
-    lower = file_name.lower()
-    try:
-        if lower.endswith(".csv"):
-            return len(pd.read_csv(io.BytesIO(raw), sep=None, engine="python"))
-        if lower.endswith((".xlsx", ".xls", ".xlsm", ".xltx")):
-            return len(pd.read_excel(io.BytesIO(raw)))
-    except Exception:
-        return 0
-    return 0
