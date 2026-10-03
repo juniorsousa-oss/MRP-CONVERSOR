@@ -17,6 +17,119 @@ CONFIG_LOGO = ROOT / "config" / "logo_setta.svg"
 
 VISUAL_CONFIG = central.load_visual_config("setta_global")
 
+DEFAULT_SETTA_UI_CONFIG = {
+    "header": {
+        "enabled": True,
+        "min_height": 150,
+        "background": "#FFFFFF",
+        "border_color": "#E5E8EE",
+        "border_radius": 18,
+        "padding_y": 18,
+        "padding_x": 24,
+        "logo_max_width": 220,
+        "logo_max_height": 90,
+        "margin_bottom": 24,
+    },
+    "top_actions": {
+        "show_github": True,
+        "show_more": True,
+        "show_share": False,
+        "show_favorite": False,
+        "show_edit": False,
+    },
+    "theme": {
+        "lock_light": True,
+        "app_background": "#F4F7FB",
+        "surface_background": "#FFFFFF",
+        "text_color": "#111827",
+    },
+}
+
+
+def _merge_config(base: dict, override: dict | None) -> dict:
+    result = {}
+    override = override if isinstance(override, dict) else {}
+    for key, value in base.items():
+        custom = override.get(key)
+        if isinstance(value, dict):
+            result[key] = _merge_config(
+                value,
+                custom if isinstance(custom, dict) else {},
+            )
+        else:
+            result[key] = value if custom is None else custom
+    for key, value in override.items():
+        if key not in result:
+            result[key] = value
+    return result
+
+
+SETTA_UI_CONFIG = _merge_config(
+    DEFAULT_SETTA_UI_CONFIG,
+    VISUAL_CONFIG.get("ui_config") or {},
+)
+HEADER_CONFIG = SETTA_UI_CONFIG["header"]
+TOP_ACTIONS_CONFIG = SETTA_UI_CONFIG["top_actions"]
+THEME_CONFIG = SETTA_UI_CONFIG["theme"]
+
+
+def _int_cfg(value, default: int, minimum: int, maximum: int) -> int:
+    try:
+        return max(minimum, min(maximum, int(value)))
+    except Exception:
+        return default
+
+
+def _css_color(value, default: str) -> str:
+    text = str(value or "").strip()
+    if len(text) in {4, 7, 9} and text.startswith("#"):
+        return text
+    return default
+
+
+def top_actions_css(config: dict) -> str:
+    selectors = []
+    if not bool(config.get("show_share", False)):
+        selectors += [
+            '[data-testid="stToolbar"] button[aria-label*="Share" i]',
+            '[data-testid="stToolbar"] a[aria-label*="Share" i]',
+            '[data-testid="stToolbar"] button[title*="Share" i]',
+            '[data-testid="stToolbar"] a[title*="Share" i]',
+            '[data-testid="stToolbar"] [data-testid*="share" i]',
+        ]
+    if not bool(config.get("show_favorite", False)):
+        selectors += [
+            '[data-testid="stToolbar"] button[aria-label*="Favorite" i]',
+            '[data-testid="stToolbar"] a[aria-label*="Favorite" i]',
+            '[data-testid="stToolbar"] button[title*="Favorite" i]',
+            '[data-testid="stToolbar"] a[title*="Favorite" i]',
+            '[data-testid="stToolbar"] button[aria-label*="Star" i]',
+            '[data-testid="stToolbar"] a[aria-label*="Star" i]',
+            '[data-testid="stToolbar"] [data-testid*="favorite" i]',
+        ]
+    if not bool(config.get("show_edit", False)):
+        selectors += [
+            '[data-testid="stToolbar"] button[aria-label*="Edit" i]',
+            '[data-testid="stToolbar"] a[aria-label*="Edit" i]',
+            '[data-testid="stToolbar"] button[title*="Edit" i]',
+            '[data-testid="stToolbar"] a[title*="Edit" i]',
+            '[data-testid="stToolbar"] [data-testid*="edit" i]',
+        ]
+    if not bool(config.get("show_github", True)):
+        selectors += [
+            '[data-testid="stToolbar"] a[href*="github.com"]',
+            '[data-testid="stToolbar"] button[aria-label*="GitHub" i]',
+            '[data-testid="stToolbar"] a[aria-label*="GitHub" i]',
+        ]
+    if not bool(config.get("show_more", True)):
+        selectors += [
+            '#MainMenu',
+            '[data-testid="stToolbar"] button[aria-label*="menu" i]',
+        ]
+    if not selectors:
+        return ""
+    return ",\n".join(selectors) + "{display:none!important;}"
+
 
 def browser_icon():
     data = str(VISUAL_CONFIG.get("favicon_data") or "").strip()
@@ -445,6 +558,92 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+_header_height = _int_cfg(
+    HEADER_CONFIG.get("min_height"), 150, 90, 320
+)
+_header_radius = _int_cfg(
+    HEADER_CONFIG.get("border_radius"), 18, 0, 40
+)
+_header_padding_y = _int_cfg(
+    HEADER_CONFIG.get("padding_y"), 18, 0, 80
+)
+_header_padding_x = _int_cfg(
+    HEADER_CONFIG.get("padding_x"), 24, 0, 120
+)
+_logo_max_width = _int_cfg(
+    HEADER_CONFIG.get("logo_max_width"), 220, 80, 600
+)
+_logo_max_height = _int_cfg(
+    HEADER_CONFIG.get("logo_max_height"), 90, 40, 240
+)
+_header_margin_bottom = _int_cfg(
+    HEADER_CONFIG.get("margin_bottom"), 24, 0, 100
+)
+_header_background = _css_color(
+    HEADER_CONFIG.get("background"), "#FFFFFF"
+)
+_header_border = _css_color(
+    HEADER_CONFIG.get("border_color"), "#E5E8EE"
+)
+_app_background = _css_color(
+    THEME_CONFIG.get("app_background"), "#F4F7FB"
+)
+_surface_background = _css_color(
+    THEME_CONFIG.get("surface_background"), "#FFFFFF"
+)
+_text_color = _css_color(
+    THEME_CONFIG.get("text_color"), "#111827"
+)
+_toolbar_rules = top_actions_css(TOP_ACTIONS_CONFIG)
+_light_lock_css = ""
+if bool(THEME_CONFIG.get("lock_light", True)):
+    _light_lock_css = f"""
+    :root, html, body, .stApp{{
+      color-scheme:light!important;
+    }}
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"]{{
+      background:{_app_background}!important;
+      color:{_text_color}!important;
+    }}
+    section[data-testid="stSidebar"],
+    [data-testid="stHeader"]{{
+      background:{_surface_background}!important;
+      color:{_text_color}!important;
+    }}
+    input, textarea,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"]{{
+      color-scheme:light!important;
+    }}
+    """
+
+st.markdown(
+    f"""
+    <style>
+    /* SETTA UI — Header Superior V1 */
+    .setta-logo-card{{
+      min-height:{_header_height}px!important;
+      background:{_header_background}!important;
+      border-color:{_header_border}!important;
+      border-radius:{_header_radius}px!important;
+      padding:{_header_padding_y}px {_header_padding_x}px!important;
+      margin-bottom:{_header_margin_bottom}px!important;
+    }}
+    .setta-logo-card img{{
+      max-width:{_logo_max_width}px!important;
+      max-height:{_logo_max_height}px!important;
+    }}
+    /* SETTA UI — Top Actions V1 */
+    {_toolbar_rules}
+    /* SETTA UI — Light Lock V1 */
+    {_light_lock_css}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 logo_bytes, logo_mime = load_logo()
 
 NAV_OPTIONS = {
@@ -509,10 +708,11 @@ if logo_bytes:
 else:
     logo_html = '<div style="font-size:2rem;font-weight:800;color:#202124">SETTA</div>'
 
-st.markdown(
-    f'<div class="setta-logo-card">{logo_html}</div>',
-    unsafe_allow_html=True,
-)
+if bool(HEADER_CONFIG.get("enabled", True)):
+    st.markdown(
+        f'<div class="setta-logo-card">{logo_html}</div>',
+        unsafe_allow_html=True,
+    )
 st.markdown(
     '<h1 class="app-title">CONVERSOR MRP | SETTA</h1>',
     unsafe_allow_html=True,
@@ -675,7 +875,7 @@ def render_report(report_type: str) -> None:
 
 
 def render_status_api() -> None:
-    tab_api, = st.tabs(["STATUS API"])
+    tab_api, tab_layout = st.tabs(["STATUS API", "LAYOUT SETTA"])
 
     with tab_api:
         for index, report_type in enumerate(pipelines.PIPELINES.keys(), start=1):
@@ -809,6 +1009,148 @@ def render_status_api() -> None:
                             st.rerun()
                         except Exception as exc:
                             st.error(f"FALHA NA ATUALIZAÇÃO: {exc}")
+
+    with tab_layout:
+        section_band(
+            "LAYOUT · SETTA",
+            "HEADER SUPERIOR, AÇÕES E TEMA",
+            "Configuração visual compartilhada pelo padrão SETTA.",
+        )
+
+        with st.form("setta_layout_config_form", border=False):
+            st.markdown("**BALÃO SUPERIOR**")
+            h1, h2, h3 = st.columns(3)
+            header_enabled = h1.checkbox(
+                "EXIBIR BALÃO",
+                value=bool(HEADER_CONFIG.get("enabled", True)),
+            )
+            header_height = h2.number_input(
+                "ALTURA MÍNIMA (PX)",
+                min_value=90,
+                max_value=320,
+                value=_int_cfg(
+                    HEADER_CONFIG.get("min_height"), 150, 90, 320
+                ),
+                step=5,
+            )
+            header_radius = h3.number_input(
+                "RAIO (PX)",
+                min_value=0,
+                max_value=40,
+                value=_int_cfg(
+                    HEADER_CONFIG.get("border_radius"), 18, 0, 40
+                ),
+                step=1,
+            )
+
+            h4, h5, h6 = st.columns(3)
+            logo_width = h4.number_input(
+                "LOGO · LARGURA MÁX. (PX)",
+                min_value=80,
+                max_value=600,
+                value=_int_cfg(
+                    HEADER_CONFIG.get("logo_max_width"), 220, 80, 600
+                ),
+                step=5,
+            )
+            logo_height = h5.number_input(
+                "LOGO · ALTURA MÁX. (PX)",
+                min_value=40,
+                max_value=240,
+                value=_int_cfg(
+                    HEADER_CONFIG.get("logo_max_height"), 90, 40, 240
+                ),
+                step=5,
+            )
+            margin_bottom = h6.number_input(
+                "ESPAÇO INFERIOR (PX)",
+                min_value=0,
+                max_value=100,
+                value=_int_cfg(
+                    HEADER_CONFIG.get("margin_bottom"), 24, 0, 100
+                ),
+                step=2,
+            )
+
+            st.markdown("**BOTÕES SUPERIORES**")
+            a1, a2, a3, a4, a5 = st.columns(5)
+            show_github = a1.checkbox(
+                "GITHUB",
+                value=bool(TOP_ACTIONS_CONFIG.get("show_github", True)),
+            )
+            show_more = a2.checkbox(
+                "3 PONTOS",
+                value=bool(TOP_ACTIONS_CONFIG.get("show_more", True)),
+            )
+            show_share = a3.checkbox(
+                "SHARE",
+                value=bool(TOP_ACTIONS_CONFIG.get("show_share", False)),
+            )
+            show_favorite = a4.checkbox(
+                "FAVORITO",
+                value=bool(TOP_ACTIONS_CONFIG.get("show_favorite", False)),
+            )
+            show_edit = a5.checkbox(
+                "EDITAR",
+                value=bool(TOP_ACTIONS_CONFIG.get("show_edit", False)),
+            )
+
+            st.markdown("**TEMA**")
+            lock_light = st.checkbox(
+                "TRAVAR A INTERFACE NO TEMA LIGHT",
+                value=bool(THEME_CONFIG.get("lock_light", True)),
+            )
+
+            save_layout = st.form_submit_button(
+                "SALVAR PADRÃO VISUAL",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if save_layout:
+            updated_ui_config = {
+                **SETTA_UI_CONFIG,
+                "header": {
+                    **HEADER_CONFIG,
+                    "enabled": bool(header_enabled),
+                    "min_height": int(header_height),
+                    "border_radius": int(header_radius),
+                    "logo_max_width": int(logo_width),
+                    "logo_max_height": int(logo_height),
+                    "margin_bottom": int(margin_bottom),
+                },
+                "top_actions": {
+                    "show_github": bool(show_github),
+                    "show_more": bool(show_more),
+                    "show_share": bool(show_share),
+                    "show_favorite": bool(show_favorite),
+                    "show_edit": bool(show_edit),
+                },
+                "theme": {
+                    **THEME_CONFIG,
+                    "lock_light": bool(lock_light),
+                },
+            }
+            try:
+                central.save_visual_config(
+                    app_key="setta_global",
+                    logo_data=str(VISUAL_CONFIG.get("logo_data") or ""),
+                    logo_mime=str(
+                        VISUAL_CONFIG.get("logo_mime") or "image/png"
+                    ),
+                    favicon_data=str(
+                        VISUAL_CONFIG.get("favicon_data") or ""
+                    ),
+                    favicon_mime=str(
+                        VISUAL_CONFIG.get("favicon_mime") or "image/png"
+                    ),
+                    ui_config=updated_ui_config,
+                )
+                central.load_visual_config.clear()
+                st.success("PADRÃO VISUAL SETTA ATUALIZADO.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"FALHA AO SALVAR O LAYOUT: {exc}")
 
 
 if selected_nav == "CONFIGURAÇÕES":
