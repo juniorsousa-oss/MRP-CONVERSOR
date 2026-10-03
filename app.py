@@ -104,42 +104,26 @@ def browser_icon():
     return "📊"
 
 
-def _setta_sidebar_initial_state():
-    """Estado inicial/forçado da sidebar sem substituir o controle nativo."""
-    close_stage = int(
-        st.session_state.get("_setta_sidebar_close_stage") or 0
-    )
-    if close_stage == 1:
-        # Primeira fase: força uma transição reconhecível pelo frontend.
-        return "expanded"
-    if close_stage == 2:
-        # Segunda fase: fecha a sidebar após a seleção do módulo.
-        return "collapsed"
-    if not st.session_state.get("_setta_sidebar_bootstrapped"):
-        st.session_state["_setta_sidebar_bootstrapped"] = True
-        return "collapsed"
-    # Depois do bootstrap, preserve a escolha manual do operador.
-    return None
+def _setta_sidebar_is_open() -> bool:
+    return bool(st.session_state.get("_setta_sidebar_open", False))
 
 
-_SETTA_SIDEBAR_STATE = _setta_sidebar_initial_state()
+def _setta_toggle_sidebar() -> None:
+    st.session_state["_setta_sidebar_open"] = not _setta_sidebar_is_open()
+
+
+def _setta_close_sidebar() -> None:
+    st.session_state["_setta_sidebar_open"] = False
+
 
 st.set_page_config(
     page_title="CONVERSOR MRP | SETTA",
     page_icon=browser_icon(),
     layout="wide",
-    initial_sidebar_state=_SETTA_SIDEBAR_STATE,
+    # Mantém o DOM da sidebar disponível. A visibilidade é controlada pela
+    # camada SETTA para permitir fechamento determinístico após a navegação.
+    initial_sidebar_state="expanded",
 )
-
-# SETTA UI — Sidebar Auto-Close V1
-# Quando um botão de navegação pede fechamento, fazemos uma transição
-# expanded -> collapsed em dois reruns leves. O Load Once impede qualquer
-# nova carga das bases durante essa operação.
-if int(st.session_state.get("_setta_sidebar_close_stage") or 0) == 1:
-    st.session_state["_setta_sidebar_close_stage"] = 2
-    st.rerun()
-elif int(st.session_state.get("_setta_sidebar_close_stage") or 0) == 2:
-    st.session_state["_setta_sidebar_close_stage"] = 0
 
 
 def load_logo():
@@ -279,6 +263,42 @@ def ensure_all_bases_ready() -> dict[str, dict]:
 
 
 _BOOT_RESULTS = ensure_all_bases_ready()
+
+
+# SETTA UI — Drawer Operacional V1
+# A sidebar continua sendo st.sidebar, mas abrir/fechar é controlado por
+# session_state. Assim o clique no módulo consegue fechá-la de forma
+# determinística sem depender do estado interno do frontend do Streamlit.
+_setta_sidebar_open = _setta_sidebar_is_open()
+if not _setta_sidebar_open:
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"]{
+          display:none!important;
+        }
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapsedControl"],
+        button[data-testid="stSidebarCollapseButton"]{
+          display:none!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapsedControl"],
+        button[data-testid="stSidebarCollapseButton"]{
+          display:none!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 st.markdown(
@@ -654,9 +674,7 @@ def current_nav_key() -> str:
 def set_nav_key(key: str) -> None:
     if key in NAV_OPTIONS:
         st.session_state["_mrp_conversor_nav"] = key
-        # O operador abre a sidebar, escolhe o módulo e ela fecha novamente.
-        # O botão nativo de abrir/fechar permanece disponível.
-        st.session_state["_setta_sidebar_close_stage"] = 1
+        _setta_close_sidebar()
 
 
 with st.sidebar:
@@ -691,6 +709,42 @@ with st.sidebar:
         f'{_status_html}',
         unsafe_allow_html=True,
     )
+
+
+# SETTA UI — Top Controls V1
+# Estes controles pertencem ao app e funcionam também em ?embed=true.
+_menu_col, _top_space, _github_col, _more_col = st.columns(
+    [0.7, 8.6, 1.2, 0.7],
+    vertical_alignment="center",
+)
+with _menu_col:
+    st.button(
+        "☰",
+        key="setta_drawer_toggle",
+        help="Abrir/fechar menu",
+        use_container_width=True,
+        on_click=_setta_toggle_sidebar,
+    )
+with _github_col:
+    st.link_button(
+        "GITHUB",
+        "https://github.com/juniorsousa-oss/MRP-CONVERSOR",
+        use_container_width=True,
+    )
+with _more_col:
+    with st.popover("⋮", use_container_width=True):
+        st.button(
+            "CONFIGURAÇÕES",
+            key="setta_top_config",
+            use_container_width=True,
+            on_click=set_nav_key,
+            args=("configuracoes",),
+        )
+        st.markdown(
+            '<a href="?embed=true&embed_options=light_theme" '
+            'target="_self" style="text-decoration:none">MODO SETTA LIMPO</a>',
+            unsafe_allow_html=True,
+        )
 
 
 if logo_bytes:
