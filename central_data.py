@@ -147,111 +147,6 @@ def download_source(source_key: str, timeout: int = 120) -> tuple[io.BytesIO, di
 
 
 
-def _normalized_values(frame: pd.DataFrame) -> list[list[Any]]:
-    return json.loads(
-        frame.to_json(
-            orient="values",
-            date_format="iso",
-            force_ascii=False,
-        )
-    )
-
-
-def build_normalized_source(
-    source_key: str,
-    file_name: str,
-    raw: bytes,
-) -> tuple[bytes, int]:
-    """Converte Excel/CSV uma única vez para SETTA_SOURCE_V1."""
-    suffix = os.path.splitext(str(file_name or "").lower())[1]
-    sheets: list[dict[str, Any]] = []
-
-    if suffix in {".xlsx", ".xlsm", ".xltx", ".xls"}:
-        engine = "xlrd" if suffix == ".xls" else "openpyxl"
-        book = pd.ExcelFile(io.BytesIO(raw), engine=engine)
-        for index, sheet_name in enumerate(book.sheet_names):
-            frame = pd.read_excel(
-                book,
-                sheet_name=sheet_name,
-                header=None,
-                dtype=object,
-            )
-            sheets.append(
-                {
-                    "index": index,
-                    "name": str(sheet_name),
-                    "rows": _normalized_values(frame),
-                    "row_count": int(len(frame)),
-                    "column_count": int(frame.shape[1]),
-                }
-            )
-    elif suffix == ".csv":
-        frame = pd.read_csv(io.BytesIO(raw), header=None, dtype=object, sep=None, engine="python")
-        sheets.append(
-            {
-                "index": 0,
-                "name": "CSV",
-                "rows": _normalized_values(frame),
-                "row_count": int(len(frame)),
-                "column_count": int(frame.shape[1]),
-            }
-        )
-    else:
-        return b"", 0
-
-    payload = {
-        "format": "SETTA_SOURCE_V1",
-        "source_key": str(source_key),
-        "file_name": str(file_name),
-        "sheets": sheets,
-    }
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return gzip.compress(encoded, compresslevel=6), sum(
-        int(sheet["row_count"]) for sheet in sheets
-    )
-
-
-def _upload_normalized_source(
-    source_key: str,
-    normalized: bytes,
-    normalized_rows: int,
-    source_version: int,
-) -> dict:
-    prepared = api_call(
-        "source_normalized_upload_prepare",
-        {"source_key": source_key},
-        timeout=30,
-    )
-    path = str(prepared.get("path") or "")
-    token = str(prepared.get("token") or "")
-    if not path or not token:
-        raise RuntimeError("A Central não autorizou a fonte normalizada.")
-
-    client = create_client(supabase_url(), supabase_key())
-    client.storage.from_(BUCKET).upload_to_signed_url(
-        path=path,
-        token=token,
-        file=normalized,
-    )
-
-    return api_call(
-        "source_normalized_commit",
-        {
-            "source_key": source_key,
-            "source_version": int(source_version),
-            "rows_count": int(normalized_rows),
-            "format": "SETTA_SOURCE_V1",
-            "profile": "WORKBOOK_MATRIX_V1",
-            "content_sha256": hashlib.sha256(normalized).hexdigest(),
-        },
-        timeout=30,
-    ).get("data") or {}
-
-
 def download_normalized_source(
     source_key: str,
     timeout: int = 120,
@@ -333,8 +228,17 @@ def source_frame(
     return data
 
 
-def download_preferred_source(source_key: str) -> dict:
-    """Usa a representação normalizada e recorre ao Excel apenas em legado."""
+def download_preferred_source(
+    source_key: str,
+    *,
+    allow_legacy_excel: bool = False,
+) -> dict:
+    """Consome a fonte técnica normalizada.
+
+    O fluxo operacional nunca mascara erro/stale voltando para Excel.
+    O bruto só pode ser usado quando uma chamada explícita de contingência
+    define allow_legacy_excel=True e a fonte normalizada realmente não existe.
+    """
     try:
         pack, meta = download_normalized_source(source_key)
         return {
@@ -342,14 +246,26 @@ def download_preferred_source(source_key: str) -> dict:
             "pack": pack,
             "meta": meta,
         }
-    except Exception:
-        raw, meta = download_source(source_key)
-        return {
-            "normalized": False,
-            "raw": raw,
-            "meta": meta,
-        }
+    except RuntimeError as exc:
+        error = str(exc).strip().upper()
+        if allow_legacy_excel and error == "NORMALIZED_SOURCE_NOT_AVAILABLE":
+            raw, meta = download_source(source_key)
+            return {
+                "normalized": False,
+                "raw": raw,
+                "meta": meta,
+                "legacy_fallback": True,
+            }
 
+        if error in {
+            "NORMALIZED_SOURCE_NOT_AVAILABLE",
+            "NORMALIZED_SOURCE_STALE",
+        }:
+            raise RuntimeError(
+                f"Fonte {source_key} aguardando normalização na Central de Dados "
+                f"({error}). O Conversor não reabrirá o Excel automaticamente."
+            ) from exc
+        raise
 
 
 def upload_source(
@@ -359,17 +275,11 @@ def upload_source(
     rows_count: int = 0,
     mime_type: str = "application/octet-stream",
 ) -> dict:
-    """Upload emergencial mantendo a mesma regra da Central: Excel entra uma vez."""
-    normalized, normalized_rows = build_normalized_source(
-        source_key,
-        file_name,
-        raw,
-    )
-    if not normalized:
-        raise ValueError(
-            f"A fonte {source_key} precisa ser tabular para atualização emergencial."
-        )
+    """Publica somente o arquivo bruto na Central.
 
+    A normalização é responsabilidade exclusiva do worker da Central de Dados.
+    O Conversor não abre, interpreta nem converte o Excel enviado.
+    """
     prepared = api_call(
         "source_upload_prepare",
         {"source_key": source_key},
@@ -387,25 +297,17 @@ def upload_source(
         file=raw,
     )
 
-    committed = api_call(
+    return api_call(
         "source_commit",
         {
             "source_key": source_key,
             "file_name": file_name,
             "mime_type": mime_type,
-            "rows_count": int(rows_count or normalized_rows),
+            "rows_count": int(rows_count or 0),
             "content_sha256": hashlib.sha256(raw).hexdigest(),
         },
         timeout=30,
     ).get("data") or {}
-
-    normalized_meta = _upload_normalized_source(
-        source_key,
-        normalized,
-        normalized_rows,
-        int(committed.get("version") or 0),
-    )
-    return {**committed, "normalized": normalized_meta}
 
 
 def dataframe_payload(frame: pd.DataFrame) -> bytes:
