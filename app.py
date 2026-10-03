@@ -776,10 +776,10 @@ def render_status_api() -> None:
 
                 if upload is not None:
                     raw = upload.getvalue()
-                    rows = pipelines.count_rows(upload.name, raw)
+                    size_mb = len(raw) / (1024 * 1024)
                     c1, c2 = st.columns(2)
                     c1.metric("ARQUIVO", upload.name)
-                    c2.metric("REGISTROS", rows if rows else "—")
+                    c2.metric("TAMANHO", f"{size_mb:.2f} MB")
 
                     if st.button(
                         "ATUALIZAR FONTE NA CENTRAL",
@@ -792,7 +792,7 @@ def render_status_api() -> None:
                                 selected_key,
                                 upload.name,
                                 raw,
-                                rows_count=rows,
+                                rows_count=0,
                                 mime_type=(
                                     upload.type
                                     or "application/octet-stream"
