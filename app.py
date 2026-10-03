@@ -315,13 +315,14 @@ st.markdown(
     }
     body{
       box-sizing:border-box!important;
+      min-height:100vh!important;
       padding:18px!important;
       margin:0!important;
     }
     .stApp{
       width:calc(100vw - 36px)!important;
-      height:calc(100vh - 36px)!important;
-      min-height:720px!important;
+      height:auto!important;
+      min-height:calc(100vh - 36px)!important;
       max-width:1680px!important;
       margin:0 auto!important;
       border:1px solid rgba(202,214,228,.9)!important;
@@ -332,10 +333,15 @@ st.markdown(
     }
     [data-testid="stAppViewContainer"]{
       width:100%!important;
-      height:100%!important;
+      height:auto!important;
+      min-height:calc(100vh - 36px)!important;
       border-radius:inherit!important;
-      overflow:hidden!important;
+      overflow:visible!important;
       background:#f4f7fb!important;
+    }
+    [data-testid="stMain"]{
+      min-height:calc(100vh - 36px)!important;
+      overflow:visible!important;
     }
     /* SETTA UI — Chrome Clean V1
        O drawer e as ações superiores agora pertencem ao app. */
@@ -351,7 +357,34 @@ st.markdown(
       margin:0!important;
       padding:0!important;
     }
-    .block-container{max-width:1780px!important;padding-top:3.2rem!important;padding-left:2.7rem!important;padding-right:2.7rem!important;padding-bottom:3rem!important;width:100%!important}
+    .block-container{
+      max-width:1780px!important;
+      padding-top:18px!important;
+      padding-left:2.7rem!important;
+      padding-right:2.7rem!important;
+      padding-bottom:32px!important;
+      width:100%!important;
+    }
+    .st-key-setta_top_controls{
+      margin:0 0 14px 0!important;
+      padding:0!important;
+    }
+    .st-key-setta_top_controls [data-testid="stHorizontalBlock"]{
+      align-items:center!important;
+      gap:10px!important;
+    }
+    .st-key-setta_drawer_toggle button{
+      min-height:42px!important;
+      height:42px!important;
+      border-radius:10px!important;
+      padding:0!important;
+    }
+    .st-key-setta_top_controls [data-testid="stPopover"] button{
+      min-height:42px!important;
+      height:42px!important;
+      border-radius:10px!important;
+      padding:0!important;
+    }
     section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important;width:260px!important;min-width:260px!important;max-width:260px!important;flex:0 0 260px!important;flex-basis:260px!important;overflow:hidden!important}
     section[data-testid="stSidebar"]>div{width:260px!important;min-width:260px!important;max-width:260px!important;box-sizing:border-box!important}
     /* PADRÃO SETTA · SIDEBAR 100% CONTROLADA POR HTML/CSS
@@ -776,27 +809,28 @@ with st.sidebar:
 
 # SETTA UI — Top Controls V1
 # A barra nativa foi removida. Permanecem somente os controles SETTA.
-_menu_col, _top_space, _more_col = st.columns(
-    [0.7, 9.1, 0.7],
-    vertical_alignment="center",
-)
-with _menu_col:
-    st.button(
-        "☰",
-        key="setta_drawer_toggle",
-        help="Abrir/fechar menu",
-        use_container_width=True,
-        on_click=_setta_toggle_sidebar,
+with st.container(key="setta_top_controls"):
+    _menu_col, _top_space, _more_col = st.columns(
+        [0.65, 9.35, 0.65],
+        vertical_alignment="center",
     )
-with _more_col:
-    with st.popover("⋮", use_container_width=True):
+    with _menu_col:
         st.button(
-            "CONFIGURAÇÕES",
-            key="setta_top_config",
+            "☰",
+            key="setta_drawer_toggle",
+            help="Abrir/fechar menu",
             use_container_width=True,
-            on_click=set_nav_key,
-            args=("configuracoes",),
+            on_click=_setta_toggle_sidebar,
         )
+    with _more_col:
+        with st.popover("⋮", use_container_width=True):
+            st.button(
+                "CONFIGURAÇÕES",
+                key="setta_top_config",
+                use_container_width=True,
+                on_click=set_nav_key,
+                args=("configuracoes",),
+            )
 
 
 if logo_bytes:
