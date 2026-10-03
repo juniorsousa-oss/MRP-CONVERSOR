@@ -157,21 +157,24 @@ jobs:
           print("setta-header-light-lock-ok")
           PY
 
-      - name: Sidebar Auto-Close smoke test
+
+      - name: SETTA Drawer deterministic smoke test
         run: |
           python - <<'PY'
           from pathlib import Path
 
           app = Path("app.py").read_text(encoding="utf-8")
-          assert "SETTA UI — Sidebar Auto-Close V1" in app
-          assert "def _setta_sidebar_initial_state(" in app
-          assert '"_setta_sidebar_bootstrapped"' in app
-          assert '"_setta_sidebar_close_stage"' in app
-          assert 'return "collapsed"' in app
-          assert 'return None' in app
-          assert 'st.session_state["_setta_sidebar_close_stage"] = 1' in app
-          assert 'st.session_state["_setta_sidebar_close_stage"] = 2' in app
-          assert "initial_sidebar_state=_SETTA_SIDEBAR_STATE" in app
-          assert 'initial_sidebar_state="locked"' not in app
-          print("setta-sidebar-auto-close-ok")
+          assert "SETTA UI — Drawer Operacional V1" in app
+          assert "SETTA UI — Top Controls V1" in app
+          assert "def _setta_sidebar_is_open(" in app
+          assert "def _setta_toggle_sidebar(" in app
+          assert "def _setta_close_sidebar(" in app
+          assert 'st.session_state["_setta_sidebar_open"] = False' in app
+          assert "_setta_close_sidebar()" in app
+          assert 'key="setta_drawer_toggle"' in app
+          assert 'initial_sidebar_state="expanded"' in app
+          assert "_setta_sidebar_close_stage" not in app
+          assert "?embed=true&embed_options=light_theme" in app
+          assert "https://github.com/juniorsousa-oss/MRP-CONVERSOR" in app
+          print("setta-drawer-deterministic-ok")
           PY
