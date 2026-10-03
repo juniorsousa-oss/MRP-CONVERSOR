@@ -145,6 +145,12 @@ jobs:
 
           assert "DEFAULT_SETTA_UI_CONFIG" in app
           assert "SETTA UI — Header Superior V1" in app
+          assert "SETTA UI — App Shell Rounded V1" in app
+          assert "max-width:1680px!important" in app
+          assert "border-radius:24px!important" in app
+          assert "padding:18px!important" in app
+          assert "box-shadow:0 24px 70px rgba(15,27,45,.13)!important" in app
+          assert "min-height:720px!important" in app
           assert "SETTA UI — Top Actions V1" in app
           assert "SETTA UI — Chrome Clean V1" in app
           assert "SETTA UI — Light Lock V1" in app
