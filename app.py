@@ -307,6 +307,12 @@ st.markdown(
     /* SETTA UI — App Shell Rounded V1
        Referência direta: OPERAHUB---NOVA-VERS-O / static/styles.css
        18px externo · 1680px máximo · raio 24px · borda/sombra do Opera Hub. */
+    html, body, #root{
+      height:auto!important;
+      min-height:100%!important;
+      overflow-x:hidden!important;
+      overflow-y:auto!important;
+    }
     html, body{
       background:
         radial-gradient(circle at 12% 8%,rgba(244,180,0,.10),transparent 24%),
@@ -320,6 +326,8 @@ st.markdown(
       margin:0!important;
     }
     .stApp{
+      position:relative!important;
+      inset:auto!important;
       width:calc(100vw - 36px)!important;
       height:auto!important;
       min-height:calc(100vh - 36px)!important;
@@ -332,6 +340,8 @@ st.markdown(
       box-shadow:0 24px 70px rgba(15,27,45,.13)!important;
     }
     [data-testid="stAppViewContainer"]{
+      position:relative!important;
+      inset:auto!important;
       width:100%!important;
       height:auto!important;
       min-height:calc(100vh - 36px)!important;
@@ -340,6 +350,8 @@ st.markdown(
       background:#f4f7fb!important;
     }
     [data-testid="stMain"]{
+      position:relative!important;
+      height:auto!important;
       min-height:calc(100vh - 36px)!important;
       overflow:visible!important;
     }
@@ -366,24 +378,30 @@ st.markdown(
       width:100%!important;
     }
     .st-key-setta_top_controls{
-      margin:0 0 14px 0!important;
+      position:absolute!important;
+      top:18px!important;
+      left:44px!important;
+      z-index:120!important;
+      width:82px!important;
+      margin:0!important;
       padding:0!important;
     }
-    .st-key-setta_top_controls [data-testid="stHorizontalBlock"]{
-      align-items:center!important;
-      gap:10px!important;
+    .st-key-setta_top_controls [data-testid="stVerticalBlock"]{
+      gap:0!important;
+    }
+    .st-key-setta_drawer_toggle{
+      width:82px!important;
+      margin:0!important;
+      padding:0!important;
     }
     .st-key-setta_drawer_toggle button{
+      width:82px!important;
       min-height:42px!important;
       height:42px!important;
       border-radius:10px!important;
       padding:0!important;
-    }
-    .st-key-setta_top_controls [data-testid="stPopover"] button{
-      min-height:42px!important;
-      height:42px!important;
-      border-radius:10px!important;
-      padding:0!important;
+      background:rgba(255,255,255,.96)!important;
+      box-shadow:0 2px 8px rgba(15,23,42,.06)!important;
     }
     section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important;width:260px!important;min-width:260px!important;max-width:260px!important;flex:0 0 260px!important;flex-basis:260px!important;overflow:hidden!important}
     section[data-testid="stSidebar"]>div{width:260px!important;min-width:260px!important;max-width:260px!important;box-sizing:border-box!important}
@@ -808,29 +826,15 @@ with st.sidebar:
 
 
 # SETTA UI — Top Controls V1
-# A barra nativa foi removida. Permanecem somente os controles SETTA.
+# A barra nativa foi removida. O único controle superior é o drawer SETTA.
 with st.container(key="setta_top_controls"):
-    _menu_col, _top_space, _more_col = st.columns(
-        [0.65, 9.35, 0.65],
-        vertical_alignment="center",
+    st.button(
+        "☰",
+        key="setta_drawer_toggle",
+        help="Abrir/fechar menu",
+        use_container_width=True,
+        on_click=_setta_toggle_sidebar,
     )
-    with _menu_col:
-        st.button(
-            "☰",
-            key="setta_drawer_toggle",
-            help="Abrir/fechar menu",
-            use_container_width=True,
-            on_click=_setta_toggle_sidebar,
-        )
-    with _more_col:
-        with st.popover("⋮", use_container_width=True):
-            st.button(
-                "CONFIGURAÇÕES",
-                key="setta_top_config",
-                use_container_width=True,
-                on_click=set_nav_key,
-                args=("configuracoes",),
-            )
 
 
 if logo_bytes:
@@ -1204,9 +1208,9 @@ def render_status_api() -> None:
             )
 
             st.markdown("**AÇÕES SUPERIORES**")
-            show_more = st.checkbox(
-                "EXIBIR MENU DE 3 PONTOS",
-                value=bool(TOP_ACTIONS_CONFIG.get("show_more", True)),
+            st.caption(
+                "O topo utiliza apenas o botão do menu lateral SETTA. "
+                "CONFIGURAÇÕES permanece disponível no menu lateral."
             )
             st.markdown("**TEMA**")
             lock_light = st.checkbox(
@@ -1233,7 +1237,7 @@ def render_status_api() -> None:
                     "margin_bottom": int(margin_bottom),
                 },
                 "top_actions": {
-                    "show_more": bool(show_more),
+                    "show_more": False,
                 },
                 "theme": {
                     **THEME_CONFIG,
