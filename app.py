@@ -314,10 +314,7 @@ st.markdown(
       overflow:hidden!important;
     }
     html, body{
-      background:
-        radial-gradient(circle at 12% 8%,rgba(244,180,0,.10),transparent 24%),
-        radial-gradient(circle at 88% 92%,rgba(30,74,120,.08),transparent 25%),
-        #EEF3F8!important;
+      background:#EEF3F8!important;
     }
     body{
       box-sizing:border-box!important;
