@@ -200,3 +200,13 @@ jobs:
           assert 'with st.popover("⋮"' not in app
           print("setta-shell-internal-scroll-ok")
           PY
+
+      - name: SETTA solid outer background smoke test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app = Path("app.py").read_text(encoding="utf-8")
+          assert "radial-gradient(" not in app
+          assert "background:#EEF3F8!important" in app
+          print("setta-solid-outer-background-ok")
+          PY
