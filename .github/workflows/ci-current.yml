@@ -156,3 +156,22 @@ jobs:
           assert 'backgroundColor = "#F4F7FB"' in config
           print("setta-header-light-lock-ok")
           PY
+
+      - name: Sidebar Auto-Close smoke test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path("app.py").read_text(encoding="utf-8")
+          assert "SETTA UI — Sidebar Auto-Close V1" in app
+          assert "def _setta_sidebar_initial_state(" in app
+          assert '"_setta_sidebar_bootstrapped"' in app
+          assert '"_setta_sidebar_close_stage"' in app
+          assert 'return "collapsed"' in app
+          assert 'return None' in app
+          assert 'st.session_state["_setta_sidebar_close_stage"] = 1' in app
+          assert 'st.session_state["_setta_sidebar_close_stage"] = 2' in app
+          assert "initial_sidebar_state=_SETTA_SIDEBAR_STATE" in app
+          assert 'initial_sidebar_state="locked"' not in app
+          print("setta-sidebar-auto-close-ok")
+          PY
