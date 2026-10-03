@@ -146,6 +146,7 @@ jobs:
           assert "DEFAULT_SETTA_UI_CONFIG" in app
           assert "SETTA UI — Header Superior V1" in app
           assert "SETTA UI — Top Actions V1" in app
+          assert "SETTA UI — Chrome Clean V1" in app
           assert "SETTA UI — Light Lock V1" in app
           assert '"show_more": True' in app
           assert "TRAVAR A INTERFACE NO TEMA LIGHT" in app
@@ -174,7 +175,9 @@ jobs:
           assert 'key="setta_drawer_toggle"' in app
           assert 'initial_sidebar_state="expanded"' in app
           assert "_setta_sidebar_close_stage" not in app
-          assert "?embed=true&embed_options=light_theme" in app
-          assert "https://github.com/juniorsousa-oss/MRP-CONVERSOR" in app
+          assert 'st.link_button(' not in app
+          assert "https://github.com/juniorsousa-oss/MRP-CONVERSOR" not in app
+          assert '[data-testid="stHeader"]' in app
+          assert '[data-testid="stToolbar"]' in app
           print("setta-drawer-deterministic-ok")
           PY
