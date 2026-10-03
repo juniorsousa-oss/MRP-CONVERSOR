@@ -304,7 +304,39 @@ else:
 st.markdown(
     """
     <style>
-    [data-testid="stAppViewContainer"]{background:#f4f7fb!important}
+    /* SETTA UI — App Shell Rounded V1
+       Referência direta: OPERAHUB---NOVA-VERS-O / static/styles.css
+       18px externo · 1680px máximo · raio 24px · borda/sombra do Opera Hub. */
+    html, body{
+      background:
+        radial-gradient(circle at 12% 8%,rgba(244,180,0,.10),transparent 24%),
+        radial-gradient(circle at 88% 92%,rgba(30,74,120,.08),transparent 25%),
+        #EEF3F8!important;
+    }
+    body{
+      box-sizing:border-box!important;
+      padding:18px!important;
+      margin:0!important;
+    }
+    .stApp{
+      width:calc(100vw - 36px)!important;
+      height:calc(100vh - 36px)!important;
+      min-height:720px!important;
+      max-width:1680px!important;
+      margin:0 auto!important;
+      border:1px solid rgba(202,214,228,.9)!important;
+      border-radius:24px!important;
+      overflow:hidden!important;
+      background:#F8FAFD!important;
+      box-shadow:0 24px 70px rgba(15,27,45,.13)!important;
+    }
+    [data-testid="stAppViewContainer"]{
+      width:100%!important;
+      height:100%!important;
+      border-radius:inherit!important;
+      overflow:hidden!important;
+      background:#f4f7fb!important;
+    }
     /* SETTA UI — Chrome Clean V1
        O drawer e as ações superiores agora pertencem ao app. */
     [data-testid="stHeader"],
@@ -570,6 +602,22 @@ st.markdown(
 
     @media(max-width:1000px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:900px){
+      body{
+        padding:0!important;
+        background:#F5F8FC!important;
+      }
+      .stApp{
+        width:100vw!important;
+        height:auto!important;
+        min-height:100vh!important;
+        max-width:none!important;
+        border:0!important;
+        border-radius:0!important;
+        box-shadow:none!important;
+      }
+      [data-testid="stAppViewContainer"]{
+        border-radius:0!important;
+      }
       .block-container{padding-top:2rem!important;padding-left:1rem!important;padding-right:1rem!important;padding-bottom:2rem!important}
       .setta-logo-card{min-height:105px;margin-bottom:1.8rem;padding:.9rem 1rem}.setta-logo-card img{max-width:170px;max-height:72px}
       .app-title{font-size:2rem!important;line-height:1.12!important}.app-sub{font-size:.86rem!important;margin-bottom:1.35rem!important}.section-title{font-size:1.14rem!important}.source-grid,.base-meta{grid-template-columns:1fr!important}
@@ -622,7 +670,10 @@ if bool(THEME_CONFIG.get("lock_light", True)):
     :root, html, body, .stApp{{
       color-scheme:light!important;
     }}
-    .stApp,
+    .stApp{{
+      background:#F8FAFD!important;
+      color:{_text_color}!important;
+    }}
     [data-testid="stAppViewContainer"],
     [data-testid="stMain"]{{
       background:{_app_background}!important;
