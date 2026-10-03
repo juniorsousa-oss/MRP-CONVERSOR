@@ -147,15 +147,12 @@ jobs:
           assert "SETTA UI — Header Superior V1" in app
           assert "SETTA UI — Top Actions V1" in app
           assert "SETTA UI — Light Lock V1" in app
-          assert '"show_github": True' in app
           assert '"show_more": True' in app
-          assert '"show_share": False' in app
-          assert '"show_favorite": False' in app
-          assert '"show_edit": False' in app
           assert "TRAVAR A INTERFACE NO TEMA LIGHT" in app
           assert "SALVAR PADRÃO VISUAL" in app
           assert "ui_config" in central
           assert 'base = "light"' in config
+          assert 'toolbarMode = "minimal"' in config
           assert 'backgroundColor = "#F4F7FB"' in config
           print("setta-header-light-lock-ok")
           PY
