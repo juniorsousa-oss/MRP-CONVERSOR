@@ -275,6 +275,168 @@ if not _setta_sidebar_open:
         """
         <style>
         section[data-testid="stSidebar"]{
+          display:none!important;
+        }
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapsedControl"],
+        button[data-testid="stSidebarCollapseButton"]{
+          display:none!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapsedControl"],
+        button[data-testid="stSidebarCollapseButton"]{
+          display:none!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+st.markdown(
+    """
+    <style>
+    /* SETTA UI — App Shell Rounded V1
+       Referência direta: OPERAHUB---NOVA-VERS-O / static/styles.css
+       18px externo · 1680px máximo · raio 24px · borda/sombra do Opera Hub. */
+    html, body, #root{
+      height:100%!important;
+      min-height:100%!important;
+      max-height:100%!important;
+      overflow:hidden!important;
+    }
+    html, body{
+      background:
+        radial-gradient(circle at 12% 8%,rgba(244,180,0,.10),transparent 24%),
+        radial-gradient(circle at 88% 92%,rgba(30,74,120,.08),transparent 25%),
+        #EEF3F8!important;
+    }
+    body{
+      box-sizing:border-box!important;
+      padding:18px!important;
+      margin:0!important;
+      overflow:hidden!important;
+    }
+    .stApp,
+    [data-testid="stApp"]{
+      position:relative!important;
+      inset:auto!important;
+      width:calc(100vw - 36px)!important;
+      height:calc(100vh - 36px)!important;
+      min-height:0!important;
+      max-height:calc(100vh - 36px)!important;
+      max-width:1680px!important;
+      margin:0 auto!important;
+      border:1px solid rgba(202,214,228,.9)!important;
+      border-radius:24px!important;
+      overflow:hidden!important;
+      background:#F8FAFD!important;
+      box-shadow:0 24px 70px rgba(15,27,45,.13)!important;
+    }
+    [data-testid="stAppViewContainer"]{
+      position:relative!important;
+      inset:auto!important;
+      width:100%!important;
+      height:100%!important;
+      min-height:0!important;
+      max-height:100%!important;
+      border-radius:24px!important;
+      overflow:hidden!important;
+      background:#f4f7fb!important;
+    }
+    [data-testid="stMain"],
+    .stMain,
+    section.main{
+      position:relative!important;
+      height:100%!important;
+      min-height:0!important;
+      max-height:100%!important;
+      overflow-x:hidden!important;
+      overflow-y:auto!important;
+      scrollbar-width:thin!important;
+      scrollbar-color:#CAD5E3 transparent!important;
+    }
+    [data-testid="stMain"]::-webkit-scrollbar,
+    .stMain::-webkit-scrollbar,
+    section.main::-webkit-scrollbar{
+      width:9px!important;
+    }
+    [data-testid="stMain"]::-webkit-scrollbar-track,
+    .stMain::-webkit-scrollbar-track,
+    section.main::-webkit-scrollbar-track{
+      background:transparent!important;
+    }
+    [data-testid="stMain"]::-webkit-scrollbar-thumb,
+    .stMain::-webkit-scrollbar-thumb,
+    section.main::-webkit-scrollbar-thumb{
+      background:#CAD5E3!important;
+      border-radius:999px!important;
+    }
+    [data-testid="stMainBlockContainer"],
+    [data-testid="stAppViewBlockContainer"]{
+      height:auto!important;
+      min-height:100%!important;
+      max-height:none!important;
+      overflow:visible!important;
+      padding-bottom:48px!important;
+    }
+    /* SETTA UI — Chrome Clean V1
+       O drawer e as ações superiores agora pertencem ao app. */
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    header[data-testid="stHeader"]{
+      display:none!important;
+      visibility:hidden!important;
+      height:0!important;
+      min-height:0!important;
+      max-height:0!important;
+      margin:0!important;
+      padding:0!important;
+    }
+    .block-container{
+      max-width:1780px!important;
+      padding-top:18px!important;
+      padding-left:2.7rem!important;
+      padding-right:2.7rem!important;
+      padding-bottom:32px!important;
+      width:100%!important;
+    }
+    .st-key-setta_top_controls{
+      position:absolute!important;
+      top:18px!important;
+      left:44px!important;
+      z-index:120!important;
+      width:82px!important;
+      margin:0!important;
+      padding:0!important;
+    }
+    .st-key-setta_top_controls [data-testid="stVerticalBlock"]{
+      gap:0!important;
+    }
+    .st-key-setta_drawer_toggle{
+      width:82px!important;
+      margin:0!important;
+      padding:0!important;
+    }
+    .st-key-setta_drawer_toggle button{
+      width:82px!important;
+      min-height:42px!important;
+      height:42px!important;
+      border-radius:10px!important;
+      padding:0!important;
+      background:rgba(255,255,255,.96)!important;
+      box-shadow:0 2px 8px rgba(15,23,42,.06)!important;
+    }
+    section[data-testid="stSidebar"]{
       align-self:stretch!important;
       height:100%!important;
       min-height:100%!important;
