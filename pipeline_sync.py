@@ -321,17 +321,48 @@ def clear_current_frame_cache() -> None:
     _cached_current_frame.clear()
 
 
+def _compact_state(state: dict) -> dict:
+    return {
+        "sync_status": str(state.get("sync_status") or ""),
+        "error": str(state.get("error") or ""),
+        "sources": state.get("sources") or {},
+        "derived": state.get("derived") or {},
+        "versions": state.get("versions") or {},
+        "stale": bool(state.get("stale")),
+        "ready": bool(state.get("ready")),
+    }
+
+
+def inspect_all_pipelines() -> dict[str, dict]:
+    """Fotografia leve dos quatro pipelines, sem baixar bases tratadas."""
+    results: dict[str, dict] = {}
+    for report_type in PIPELINES:
+        try:
+            state = get_state(report_type)
+            state["sync_status"] = (
+                "ATUALIZADO"
+                if state.get("ready") and not state.get("stale")
+                else "AGUARDANDO"
+            )
+            results[report_type] = _compact_state(state)
+        except Exception as exc:
+            results[report_type] = {
+                "sync_status": "ERRO",
+                "error": str(exc),
+                "sources": {},
+                "derived": {},
+                "versions": {},
+                "stale": False,
+                "ready": False,
+            }
+    return results
+
+
 def sync_all_pipelines(force: bool = False) -> dict[str, dict]:
     results: dict[str, dict] = {}
     for report_type in PIPELINES:
         sync = sync_pipeline(report_type, force=force)
-        results[report_type] = {
-            "sync_status": str(sync.get("sync_status") or ""),
-            "error": str(sync.get("error") or ""),
-            "derived": sync.get("derived") or {},
-            "stale": bool(sync.get("stale")),
-            "ready": bool(sync.get("ready")),
-        }
+        results[report_type] = _compact_state(sync)
     return results
 
 
