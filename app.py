@@ -737,10 +737,14 @@ def render_status_api() -> None:
                             st.success("BASE REPROCESSADA.")
                             st.rerun()
                         else:
-                            st.error(
-                                forced.get("error")
-                                or "NÃO FOI POSSÍVEL REPROCESSAR."
-                            )
+                            _force_error = str(forced.get("error") or "")
+                            if "aguardando normalização" in _force_error.lower():
+                                st.warning(_force_error)
+                            else:
+                                st.error(
+                                    _force_error
+                                    or "NÃO FOI POSSÍVEL REPROCESSAR."
+                                )
                     except Exception as exc:
                         st.error(f"FALHA NO REPROCESSAMENTO: {exc}")
 
@@ -794,10 +798,14 @@ def render_status_api() -> None:
                                     or "application/octet-stream"
                                 ),
                             )
-                            st.session_state["_mrp_converter_boot_done"] = False
-                            st.session_state.pop("_mrp_converter_boot_results", None)
-                            st.session_state.pop("_mrp_converter_warmed_rows", None)
-                            st.success("FONTE ATUALIZADA. O CONVERSOR IRÁ SINCRONIZAR AS BASES AFETADAS.")
+                            st.session_state["_mrp_converter_boot_results"] = pipelines.inspect_all_pipelines()
+                            st.session_state["_mrp_converter_boot_done"] = True
+                            st.session_state["_mrp_normalization_pending"] = selected_key
+                            st.success(
+                                "FONTE BRUTA ATUALIZADA. A CENTRAL DE DADOS IRÁ "
+                                "NORMALIZAR O ARQUIVO E O PIPELINE SERÁ PROCESSADO "
+                                "AUTOMATICAMENTE."
+                            )
                             st.rerun()
                         except Exception as exc:
                             st.error(f"FALHA NA ATUALIZAÇÃO: {exc}")
