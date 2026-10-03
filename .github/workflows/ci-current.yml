@@ -87,3 +87,25 @@ jobs:
           assert "ÚLTIMA ATUALIZAÇÃO" in app
           print("startup-sync-ok")
           PY
+
+      - name: SETTA Runtime Load Once smoke test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path("app.py").read_text(encoding="utf-8")
+          pipeline = Path("pipeline_sync.py").read_text(encoding="utf-8")
+          package = Path("conversores/__init__.py").read_text(encoding="utf-8")
+
+          assert 'href="?nav=' not in app
+          assert "st.query_params" not in app
+          assert "def set_nav_key(" in app
+          assert 'st.session_state["_mrp_conversor_nav"]' in app
+          assert "def ensure_all_bases_ready(" in app
+          assert 'st.session_state.get("_mrp_converter_boot_done")' in app
+          assert "def inspect_all_pipelines(" in pipeline
+          assert "st.file_uploader =" not in package
+          assert "st.selectbox =" not in package
+          assert "st.caption =" not in package
+          print("setta-runtime-load-once-ok")
+          PY
