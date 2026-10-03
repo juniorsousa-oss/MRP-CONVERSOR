@@ -150,7 +150,13 @@ jobs:
           assert "border-radius:24px!important" in app
           assert "padding:18px!important" in app
           assert "box-shadow:0 24px 70px rgba(15,27,45,.13)!important" in app
-          assert "min-height:720px!important" in app
+          assert "min-height:calc(100vh - 36px)!important" in app
+          assert "height:calc(100vh - 36px)!important" not in app
+          assert "height:auto!important" in app
+          assert "overflow:visible!important" in app
+          assert 'st.container(key="setta_top_controls")' in app
+          assert "padding-top:18px!important" in app
+          print("content-driven shell and top spacing: OK")
           assert "SETTA UI — Top Actions V1" in app
           assert "SETTA UI — Chrome Clean V1" in app
           assert "SETTA UI — Light Lock V1" in app
