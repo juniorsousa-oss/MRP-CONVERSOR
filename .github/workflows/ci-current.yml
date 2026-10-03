@@ -113,3 +113,23 @@ jobs:
           assert "st.caption =" not in package
           print("setta-runtime-load-once-ok")
           PY
+
+      - name: Centralized source ingestion smoke test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          central = Path("central_data.py").read_text(encoding="utf-8")
+          pipeline = Path("pipeline_sync.py").read_text(encoding="utf-8")
+          app = Path("app.py").read_text(encoding="utf-8")
+
+          assert "def build_normalized_source(" not in central
+          assert "def _upload_normalized_source(" not in central
+          assert "allow_legacy_excel: bool = False" in central
+          assert "source_normalized_upload_prepare" not in central
+          assert "def count_rows(" not in pipeline
+          assert "pipelines.count_rows(" not in app
+          assert "FONTE BRUTA ATUALIZADA" in app
+          assert "aguardando normalização" in pipeline
+          print("centralized-source-ingestion-ok")
+          PY
