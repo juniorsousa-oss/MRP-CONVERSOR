@@ -101,6 +101,10 @@ jobs:
           assert "st.query_params" not in app
           assert "def set_nav_key(" in app
           assert 'st.session_state["_mrp_conversor_nav"]' in app
+          assert "converter_general_status(_BOOT_RESULTS)" in app
+          assert 'button[data-testid="stBaseButton-primary"]' in app
+          assert 'button[data-testid="stBaseButton-secondary"]' in app
+          assert ".st-key-setta_nav_0" in app
           assert "def ensure_all_bases_ready(" in app
           assert 'st.session_state.get("_mrp_converter_boot_done")' in app
           assert "def inspect_all_pipelines(" in pipeline
