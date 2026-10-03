@@ -310,8 +310,12 @@ st.markdown(
     html, body, #root{
       height:auto!important;
       min-height:100%!important;
+      max-height:none!important;
       overflow-x:hidden!important;
-      overflow-y:auto!important;
+      overflow-y:visible!important;
+    }
+    html{
+      scrollbar-gutter:stable!important;
     }
     html, body{
       background:
@@ -320,22 +324,27 @@ st.markdown(
         #EEF3F8!important;
     }
     body{
+      position:relative!important;
       box-sizing:border-box!important;
       min-height:100vh!important;
+      max-height:none!important;
       padding:18px!important;
       margin:0!important;
+      overflow-y:auto!important;
     }
-    .stApp{
+    .stApp,
+    [data-testid="stApp"]{
       position:relative!important;
       inset:auto!important;
       width:calc(100vw - 36px)!important;
       height:auto!important;
       min-height:calc(100vh - 36px)!important;
+      max-height:none!important;
       max-width:1680px!important;
       margin:0 auto!important;
       border:1px solid rgba(202,214,228,.9)!important;
       border-radius:24px!important;
-      overflow:hidden!important;
+      overflow:visible!important;
       background:#F8FAFD!important;
       box-shadow:0 24px 70px rgba(15,27,45,.13)!important;
     }
@@ -345,15 +354,27 @@ st.markdown(
       width:100%!important;
       height:auto!important;
       min-height:calc(100vh - 36px)!important;
-      border-radius:inherit!important;
+      max-height:none!important;
+      border-radius:24px!important;
       overflow:visible!important;
       background:#f4f7fb!important;
     }
-    [data-testid="stMain"]{
+    [data-testid="stMain"],
+    .stMain,
+    section.main{
       position:relative!important;
       height:auto!important;
       min-height:calc(100vh - 36px)!important;
+      max-height:none!important;
       overflow:visible!important;
+    }
+    [data-testid="stMainBlockContainer"],
+    [data-testid="stAppViewBlockContainer"]{
+      height:auto!important;
+      min-height:0!important;
+      max-height:none!important;
+      overflow:visible!important;
+      padding-bottom:48px!important;
     }
     /* SETTA UI — Chrome Clean V1
        O drawer e as ações superiores agora pertencem ao app. */
@@ -403,7 +424,17 @@ st.markdown(
       background:rgba(255,255,255,.96)!important;
       box-shadow:0 2px 8px rgba(15,23,42,.06)!important;
     }
-    section[data-testid="stSidebar"]{background:#fff!important;border-right:1px solid #e8ebf0!important;width:260px!important;min-width:260px!important;max-width:260px!important;flex:0 0 260px!important;flex-basis:260px!important;overflow:hidden!important}
+    section[data-testid="stSidebar"]{
+      background:#fff!important;
+      border-right:1px solid #e8ebf0!important;
+      border-radius:24px 0 0 24px!important;
+      width:260px!important;
+      min-width:260px!important;
+      max-width:260px!important;
+      flex:0 0 260px!important;
+      flex-basis:260px!important;
+      overflow:hidden!important;
+    }
     section[data-testid="stSidebar"]>div{width:260px!important;min-width:260px!important;max-width:260px!important;box-sizing:border-box!important}
     /* PADRÃO SETTA · SIDEBAR 100% CONTROLADA POR HTML/CSS
        26 / 20 / 8 / 42 / 2 / 20 / 20 / 8 px */
@@ -657,10 +688,12 @@ st.markdown(
         padding:0!important;
         background:#F5F8FC!important;
       }
-      .stApp{
+      .stApp,
+      [data-testid="stApp"]{
         width:100vw!important;
         height:auto!important;
         min-height:100vh!important;
+        max-height:none!important;
         max-width:none!important;
         border:0!important;
         border-radius:0!important;
