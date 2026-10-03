@@ -155,6 +155,12 @@ jobs:
           assert "height:auto!important" in app
           assert "overflow:visible!important" in app
           assert "overflow-y:auto!important" in app
+          assert '[data-testid="stApp"]' in app
+          assert '[data-testid="stMainBlockContainer"]' in app
+          assert '[data-testid="stAppViewBlockContainer"]' in app
+          assert "max-height:none!important" in app
+          assert "overflow:visible!important" in app
+          assert "padding-bottom:48px!important" in app
           assert "position:relative!important" in app
           assert "inset:auto!important" in app
           assert "document scroll restored" not in app
