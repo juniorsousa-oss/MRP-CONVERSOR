@@ -69,31 +69,29 @@ def fmt_dt(value) -> str:
         return "—"
 
 
-def converter_general_status() -> dict:
+def converter_general_status(results: dict[str, dict] | None = None) -> dict:
+    snapshot = results or st.session_state.get("_mrp_converter_boot_results") or {}
     total = len(pipelines.PIPELINES)
-    states = []
     errors = 0
-
-    for report_type in pipelines.PIPELINES:
-        try:
-            states.append(pipelines.get_state(report_type))
-        except Exception:
-            errors += 1
-
     updated = 0
     processed_values = []
     stale = False
     waiting = False
 
-    for state in states:
+    for report_type in pipelines.PIPELINES:
+        state = snapshot.get(report_type) or {}
+        sync_status = str(state.get("sync_status") or "").upper()
         derived = state.get("derived") or {}
         available = bool(derived.get("available"))
         ready = bool(state.get("ready"))
         is_stale = bool(state.get("stale"))
+
+        if sync_status == "ERRO":
+            errors += 1
         stale = stale or is_stale
         waiting = waiting or (not ready) or (not available)
 
-        if ready and available and not is_stale:
+        if ready and available and not is_stale and sync_status != "ERRO":
             updated += 1
 
         processed_at = derived.get("processed_at")
@@ -286,6 +284,43 @@ st.markdown(
       transform:translateY(-50%)!important;
     }
 
+    /* SETTA UI — Sidebar Operacional V1: botões nativos, sem ?nav= */
+    section[data-testid="stSidebar"] div[data-testid="stButton"]{
+      margin:0!important;padding:0!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button{
+      position:relative!important;
+      width:100%!important;
+      height:42px!important;min-height:42px!important;max-height:42px!important;
+      justify-content:flex-start!important;
+      text-align:left!important;
+      margin:0!important;
+      padding:0 12px 0 24px!important;
+      border-radius:10px!important;
+      font-size:13px!important;line-height:16px!important;
+      box-shadow:none!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button p{
+      margin:0!important;width:100%!important;text-align:left!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="secondary"]{
+      background:transparent!important;border:1px solid transparent!important;
+      color:#374151!important;font-weight:500!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="secondary"]:hover{
+      background:#f8fafc!important;border-color:#e5e7eb!important;color:#111827!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primary"]{
+      background:#111827!important;border:1px solid #111827!important;
+      color:#fff!important;font-weight:700!important;
+      box-shadow:0 5px 14px rgba(17,24,39,.14)!important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primary"]::before{
+      content:""!important;position:absolute!important;left:7px!important;top:50%!important;
+      width:4px!important;height:20px!important;border-radius:999px!important;
+      background:#ef4444!important;transform:translateY(-50%)!important;
+    }
+
     .sidebar-divider{
       display:block!important;
       width:100%!important;
@@ -393,12 +428,6 @@ NAV_OPTIONS = {
 
 
 def current_nav_key() -> str:
-    # A navegação lateral usa links HTML com query param para não depender
-    # dos wrappers automáticos de st.button().
-    query_key = str(st.query_params.get("nav") or "").strip()
-    if query_key in NAV_OPTIONS:
-        st.session_state["_mrp_conversor_nav"] = query_key
-
     key = str(st.session_state.get("_mrp_conversor_nav") or "relatorio-geral")
     if key not in NAV_OPTIONS:
         key = "relatorio-geral"
@@ -406,33 +435,39 @@ def current_nav_key() -> str:
     return key
 
 
+def set_nav_key(key: str) -> None:
+    if key in NAV_OPTIONS:
+        st.session_state["_mrp_conversor_nav"] = key
+
 
 with st.sidebar:
     _nav_key = current_nav_key()
     selected_nav, tipo_relatorio = NAV_OPTIONS[_nav_key]
 
-    _nav_links = "".join(
-        (
-            f'<a class="sidebar-nav-link{" active" if _key == _nav_key else ""}" '
-            f'href="?nav={_key}" target="_self">{_label}</a>'
-        )
-        for _key, (_label, _) in NAV_OPTIONS.items()
-    )
-
-    _status_html = converter_status_html(converter_general_status())
-
     st.markdown(
-        '<div class="setta-sidebar">'
         '<div class="sidebar-brand">'
         '<div class="sidebar-brand-title">CONVERSOR MRP</div>'
         '<div class="sidebar-brand-sub">Central de Dados SETTA</div>'
         '</div>'
-        '<div class="sidebar-section-label">NAVEGAÇÃO</div>'
-        f'<div class="sidebar-nav">{_nav_links}</div>'
+        '<div class="sidebar-section-label">NAVEGAÇÃO</div>',
+        unsafe_allow_html=True,
+    )
+
+    for _nav_index, (_key, (_label, _report_type)) in enumerate(NAV_OPTIONS.items()):
+        st.button(
+            _label,
+            key=f"setta_nav_{_nav_index}",
+            type="primary" if _key == _nav_key else "secondary",
+            use_container_width=True,
+            on_click=set_nav_key,
+            args=(_key,),
+        )
+
+    _status_html = converter_status_html(_BOOT_RESULTS)
+    st.markdown(
         '<div class="sidebar-divider"></div>'
         '<div class="sidebar-section-label">STATUS GERAL</div>'
-        f'{_status_html}'
-        '</div>',
+        f'{_status_html}',
         unsafe_allow_html=True,
     )
 
@@ -497,30 +532,25 @@ def source_cards_html(report_type: str, source_state: dict) -> str:
 def render_report(report_type: str) -> None:
     cfg = pipelines.config_for(report_type)
 
-    try:
-        state = pipelines.get_state(report_type)
-        boot_meta = (_BOOT_RESULTS or {}).get(report_type) or {}
-        sync = {
-            **state,
-            "sync_status": (
-                boot_meta.get("sync_status")
-                or ("ATUALIZADO" if state.get("ready") and not state.get("stale") else "AGUARDANDO")
-            ),
-            "result": None,
-            "error": boot_meta.get("error") or "",
-        }
-    except Exception as exc:
-        sync = {
-            "config": cfg,
-            "sources": {},
-            "derived": {},
-            "versions": {},
-            "ready": False,
-            "stale": False,
-            "sync_status": "ERRO",
-            "result": None,
-            "error": str(exc),
-        }
+    boot_meta = (_BOOT_RESULTS or {}).get(report_type) or {}
+    sync = {
+        "config": cfg,
+        "sources": boot_meta.get("sources") or {},
+        "derived": boot_meta.get("derived") or {},
+        "versions": boot_meta.get("versions") or {},
+        "ready": bool(boot_meta.get("ready")),
+        "stale": bool(boot_meta.get("stale")),
+        "sync_status": (
+            boot_meta.get("sync_status")
+            or (
+                "ATUALIZADO"
+                if boot_meta.get("ready") and not boot_meta.get("stale")
+                else "AGUARDANDO"
+            )
+        ),
+        "result": None,
+        "error": boot_meta.get("error") or "",
+    }
 
     st.markdown(
         f'<div class="section-title">{selected_nav}</div>',
@@ -671,6 +701,8 @@ def render_status_api() -> None:
                             )
                         if forced.get("sync_status") == "PROCESSADO":
                             pipelines.clear_current_frame_cache()
+                            st.session_state["_mrp_converter_boot_results"] = pipelines.inspect_all_pipelines()
+                            st.session_state["_mrp_converter_boot_done"] = True
                             st.success("BASE REPROCESSADA.")
                             st.rerun()
                         else:
@@ -686,6 +718,8 @@ def render_status_api() -> None:
                     use_container_width=True,
                     key=f'refresh_{cfg["derived_key"]}_status_api',
                 ):
+                    st.session_state["_mrp_converter_boot_results"] = pipelines.inspect_all_pipelines()
+                    st.session_state["_mrp_converter_boot_done"] = True
                     st.rerun()
 
                 source_options = {
@@ -729,7 +763,10 @@ def render_status_api() -> None:
                                     or "application/octet-stream"
                                 ),
                             )
-                            st.success("FONTE ATUALIZADA.")
+                            st.session_state["_mrp_converter_boot_done"] = False
+                            st.session_state.pop("_mrp_converter_boot_results", None)
+                            st.session_state.pop("_mrp_converter_warmed_rows", None)
+                            st.success("FONTE ATUALIZADA. O CONVERSOR IRÁ SINCRONIZAR AS BASES AFETADAS.")
                             st.rerun()
                         except Exception as exc:
                             st.error(f"FALHA NA ATUALIZAÇÃO: {exc}")
