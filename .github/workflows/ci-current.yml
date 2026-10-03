@@ -154,7 +154,16 @@ jobs:
           assert "height:calc(100vh - 36px)!important" not in app
           assert "height:auto!important" in app
           assert "overflow:visible!important" in app
+          assert "overflow-y:auto!important" in app
+          assert "position:relative!important" in app
+          assert "inset:auto!important" in app
+          assert "document scroll restored" not in app
           assert 'st.container(key="setta_top_controls")' in app
+          assert 'with st.popover("⋮"' not in app
+          assert 'key="setta_top_config"' not in app
+          assert "position:absolute!important" in app
+          assert "top:18px!important" in app
+          assert "left:44px!important" in app
           assert "padding-top:18px!important" in app
           print("content-driven shell and top spacing: OK")
           assert "SETTA UI — Top Actions V1" in app
