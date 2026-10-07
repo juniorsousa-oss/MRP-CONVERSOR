@@ -182,23 +182,22 @@ jobs:
           print("setta-drawer-deterministic-ok")
           PY
 
-      - name: SETTA App Shell internal-scroll smoke test
+      - name: SETTA standard page layout smoke test
         run: |
           python - <<'PY'
           from pathlib import Path
 
           app = Path("app.py").read_text(encoding="utf-8")
-          assert "SETTA UI — App Shell Rounded V1" in app
-          assert "height:calc(100vh - 36px)!important" in app
-          assert "overflow:hidden!important" in app
-          assert "overflow-y:auto!important" in app
-          assert "scrollbar-color:#CAD5E3 transparent!important" in app
-          assert "align-self:stretch!important" in app
-          assert "height:100%!important" in app
-          assert "max-height:100%!important" in app
-          assert "padding-bottom:48px!important" in app
+          assert "SETTA UI — Layout padrão Streamlit" in app
+          assert "SETTA UI — App Shell Rounded V1" not in app
+          assert "height:calc(100vh - 36px)!important" not in app
+          assert "border-radius:24px!important" not in app
+          assert "box-shadow:0 24px 70px" not in app
+          assert "width:100%!important" in app
+          assert "min-height:100vh!important" in app
+          assert "overflow-y:visible!important" in app
           assert 'with st.popover("⋮"' not in app
-          print("setta-shell-internal-scroll-ok")
+          print("setta-standard-page-layout-ok")
           PY
 
       - name: SETTA solid outer background smoke test
