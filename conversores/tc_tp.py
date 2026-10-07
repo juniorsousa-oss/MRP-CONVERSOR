@@ -60,6 +60,7 @@ def _localizar_coluna(df, aliases, fallback_idx=None):
 
 
 def _status_em_producao(valor):
+    """PMP em produção: PROGRAMADO e ATRASADO; status já executados ficam fora."""
     status = _normalizar_texto(valor)
     return status.startswith("PROGRAMAD") or status.startswith("ATRASAD")
 
