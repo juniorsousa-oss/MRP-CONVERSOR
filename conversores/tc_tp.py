@@ -59,8 +59,9 @@ def _localizar_coluna(df, aliases, fallback_idx=None):
     )
 
 
-def _status_programado(valor):
-    return _normalizar_texto(valor).startswith("PROGRAMAD")
+def _status_em_producao(valor):
+    status = _normalizar_texto(valor)
+    return status.startswith("PROGRAMAD") or status.startswith("ATRASAD")
 
 
 def _colunas_pmp(pmp):
@@ -197,7 +198,7 @@ def _preparar_pmp(pmp, codigos_h001):
     dados = pmp.copy()
 
     dados["STATUS"] = dados.iloc[:, col["status"]].map(_normalizar_texto)
-    dados = dados[dados["STATUS"].map(_status_programado)].copy()
+    dados = dados[dados["STATUS"].map(_status_em_producao)].copy()
 
     dados["ORDEM DE PRODUÇÃO"] = dados.iloc[:, col["ordem"]].map(_texto)
     dados["CÓDIGO INICIAL"] = dados.iloc[:, col["codigo_alternativo"]].map(_codigo)
@@ -265,20 +266,20 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         status_lidos = _status_encontrados_pmp(pmp_bruto)
         detalhe = ", ".join(status_lidos) if status_lidos else "nenhum status identificado"
         erros.append(
-            "Nenhuma OP com STATUS = PROGRAMADO foi encontrada no PMP. "
+            "Nenhuma OP com STATUS = PROGRAMADO ou ATRASADO foi encontrada no PMP. "
             f"Status identificados: {detalhe}."
         )
 
     if not pmp.empty and pmp["DATA DE ENTREGA"].notna().sum() == 0:
         erros.append(
-            "As OPs programadas foram encontradas, porém nenhuma DATA ENTREGA CLIENTE "
+            "As OPs em produção (PROGRAMADO/ATRASADO) foram encontradas, porém nenhuma DATA ENTREGA CLIENTE "
             "foi reconhecida. A exportação foi bloqueada para evitar relatório sem datas."
         )
 
     if len(h001_bruto) > 0 and bom.empty:
         avisos.append(
             "O H001 foi lido, mas nenhuma BOM válida foi encontrada. "
-            "As OPs programadas serão mantidas com uma linha e material zerado."
+            "As OPs em produção (PROGRAMADO/ATRASADO) serão mantidas com uma linha e material zerado."
         )
 
     vinculos = pmp.merge(bom, on="CÓDIGO PRODUTO", how="left", indicator=True)
@@ -420,7 +421,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
 
     if not sem_bom.empty:
         avisos.append(
-            f"{len(sem_bom)} OP(s) com STATUS = PROGRAMADO não possuem BOM no H001 "
+            f"{len(sem_bom)} OP(s) com STATUS = PROGRAMADO/ATRASADO não possuem BOM no H001 "
             "e foram mantidas no relatório em uma única linha, com material e "
             "quantidades zerados."
         )
@@ -464,6 +465,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     metricas = {
         "linhas_pmp_brutas": len(pmp_bruto),
         "ofs_programadas": len(pmp),
+        "ofs_em_producao": len(pmp),
         "ofs_com_bom": base_com_bom["ORDEM DE PRODUÇÃO"].nunique(),
         "linhas_bom": len(bom),
         "linhas_resultado": len(base),
