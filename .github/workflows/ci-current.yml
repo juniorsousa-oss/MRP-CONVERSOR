@@ -182,6 +182,20 @@ jobs:
           print("setta-drawer-deterministic-ok")
           PY
 
+      - name: TC/TP PMP em produção smoke test
+        run: |
+          python - <<'PY'
+          from conversores.tc_tp import _status_em_producao
+
+          assert _status_em_producao("PROGRAMADO") is True
+          assert _status_em_producao("ATRASADO") is True
+          assert _status_em_producao("EXEC. ATRASADO") is False
+          assert _status_em_producao("EXEC. NO PRAZO") is False
+          assert _status_em_producao("EXEC. ADIANTADO") is False
+          assert _status_em_producao("REPROVADO") is False
+          print("tctp-pmp-em-producao-ok")
+          PY
+
       - name: SETTA standard page layout smoke test
         run: |
           python - <<'PY'
