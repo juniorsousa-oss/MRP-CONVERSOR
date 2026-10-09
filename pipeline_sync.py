@@ -198,7 +198,7 @@ def _select_pc_sheet(source: dict) -> str:
                     cc = (
                         probe.iloc[:500, 21]
                         .astype("string").fillna("").str.strip()
-                        .str.replace(r"\\.0$", "", regex=True)
+                        .str.replace(r"\.0$", "", regex=True)
                     )
                     if cc.eq("600307").any():
                         structured.append(name)
