@@ -17,6 +17,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python
         run: python -m py_compile app.py central_data.py pipeline_sync.py conversores/*.py
+      - name: Testar seleção de aba P.C.
+        run: python -m unittest discover -s tests -v
       - name: Serialization smoke test
         run: |
           python - <<'PY'
