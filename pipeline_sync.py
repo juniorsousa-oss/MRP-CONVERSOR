@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -154,6 +156,72 @@ def _source_sheet_names(source: dict) -> list[str]:
     return names
 
 
+def _normalize_sheet_name(value: str) -> str:
+    """Normaliza diferenças de acentos, pontuação e espaços nos nomes das abas."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", text.casefold()).strip()
+
+
+def _select_pc_sheet(source: dict) -> str:
+    """Identifica a aba de pedidos autorizados, sem assumir ordem no arquivo."""
+    sheets = _source_sheet_names(source)
+    if not sheets:
+        raise ValueError("O arquivo P.C. não contém planilhas disponíveis.")
+
+    original = "2-Pedido de Compras   Autoriz"
+    desired = _normalize_sheet_name(original)
+    exact = [name for name in sheets if _normalize_sheet_name(name) == desired]
+    if len(exact) == 1:
+        chosen = exact[0]
+    else:
+        # O relatório ERP pode alterar a quantidade de espaços ou abreviar o título.
+        named = [
+            name for name in sheets
+            if (
+                "pedido de compras" in _normalize_sheet_name(name)
+                and "autor" in _normalize_sheet_name(name)
+                and "nao autor" not in _normalize_sheet_name(name)
+            )
+        ]
+        if len(named) == 1:
+            chosen = named[0]
+        else:
+            # Última alternativa: somente uma aba com a estrutura esperada do P.C.
+            # A coluna V é o Centro de Custo no modelo existente.
+            structured = []
+            for name in sheets:
+                try:
+                    probe = _source_frame(source, sheet_name=name, header=1)
+                    if probe.shape[1] < 22:
+                        continue
+                    cc = (
+                        probe.iloc[:500, 21]
+                        .astype("string").fillna("").str.strip()
+                        .str.replace(r"\\.0$", "", regex=True)
+                    )
+                    if cc.eq("600307").any():
+                        structured.append(name)
+                except (ValueError, IndexError, TypeError):
+                    continue
+            if len(structured) != 1:
+                raise ValueError(
+                    "Não foi possível identificar com segurança a aba de "
+                    "pedidos de compras autorizados no P.C. "
+                    f"Abas disponíveis: {sheets}. "
+                    "Verifique o modelo exportado pelo Protheus."
+                )
+            chosen = structured[0]
+
+    frame = _source_frame(source, sheet_name=chosen, header=1)
+    if frame.shape[1] < 22:
+        raise ValueError(
+            f"A aba '{chosen}' do P.C. possui {frame.shape[1]} colunas; "
+            "são necessárias pelo menos 22 (até a coluna V - Centro de Custo)."
+        )
+    return chosen
+
+
 def _process(report_type: str, files: dict[str, dict]) -> dict:
     if report_type == "Relatório Geral":
         bruto = _source_frame(files["relatorio_geral"], sheet_name="Geral")
@@ -174,9 +242,7 @@ def _process(report_type: str, files: dict[str, dict]) -> dict:
         sc = _source_frame(files["sc"], header=1)
 
         pc_source = files["pc"]
-        sheet = "2-Pedido de Compras   Autoriz"
-        if sheet not in _source_sheet_names(pc_source):
-            raise ValueError(f"A planilha '{sheet}' não foi encontrada no P.C.")
+        sheet = _select_pc_sheet(pc_source)
         pc = _source_frame(pc_source, sheet_name=sheet, header=1)
         pre_nota = _source_frame(files["pre_nota"], header=1)
         return processar_compras(sc, pc, pre_nota)
