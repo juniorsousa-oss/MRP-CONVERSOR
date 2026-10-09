@@ -27,6 +27,12 @@ jobs:
           python - <<'PY'
           import pipeline_sync as pipelines
 
+          pc_source = pipelines.central.download_preferred_source("pc")
+          available_pc_sheets = pipelines._source_sheet_names(pc_source)
+          chosen_pc_sheet = pipelines._select_pc_sheet(pc_source)
+          print("PC_SOURCE_SHEETS", available_pc_sheets)
+          print("PC_SELECTED_SHEET", chosen_pc_sheet)
+
           for report_type, cfg in pipelines.PIPELINES.items():
               files = pipelines._download_sources(cfg)
               assert files, report_type
