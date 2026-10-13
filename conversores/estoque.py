@@ -68,7 +68,7 @@ def _numero(serie: pd.Series) -> pd.Series:
             # Único caso inequívoco de separador de milhar por ponto:
             # múltiplos blocos de três dígitos, como 1.234.567.
             import re
-            if re.fullmatch(r"[+-]?\\d{1,3}(?:\\.\\d{3})+", txt):
+            if re.fullmatch(r"[+-]?\d{1,3}(?:\.\d{3})+", txt):
                 txt = txt.replace(".", "")
         try:
             return float(txt)
