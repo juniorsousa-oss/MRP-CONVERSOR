@@ -103,6 +103,10 @@ def get_state(report_type: str) -> dict:
         cfg["derived_key"],
     )
     versions = central.source_versions(source_status, cfg["sources"])
+    if report_type == "Saldo em Estoque":
+        # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
+        # reconstrução da base mesmo com versões iguais do ERP.
+        versions["revisao_calculo_estoque"] = 2
     ready = central.all_sources_available(source_status, cfg["sources"])
     stale = ready and central.needs_reprocess(versions, derived_meta)
     return {
