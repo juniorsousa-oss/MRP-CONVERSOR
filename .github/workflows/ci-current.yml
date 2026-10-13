@@ -16,6 +16,9 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python
         run: python -m py_compile app.py central_data.py pipeline_sync.py conversores/*.py
+      - name: Testar saldo real de estoque e separadores decimais
+        run: python tests/test_estoque_decimal.py
+
       - name: Serialization smoke test
         run: |
           python - <<'PY'
