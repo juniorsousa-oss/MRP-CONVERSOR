@@ -38,10 +38,44 @@ def _normalizar_codigo(valor: Any, erros: list[str], linha: int, origem: str) ->
 
 
 def _numero(serie: pd.Series) -> pd.Series:
+    """Preserva quantidades decimais de Excel e da Central normalizada.
+
+    A normalização da Central pode transformar a célula 1202.5 em texto
+    "1202.5". Remover todo ponto tratava 1202.5 como 12025 e 223.5 como
+    2235, produzindo saldo disponível fictício.
+    """
     if pd.api.types.is_numeric_dtype(serie):
         return pd.to_numeric(serie, errors="coerce").fillna(0)
-    texto = serie.astype(str).str.strip().str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
-    return pd.to_numeric(texto, errors="coerce").fillna(0)
+
+    def parse(value: Any) -> float:
+        if value is None or pd.isna(value):
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        txt = str(value).strip().replace("\u00a0", "").replace(" ", "")
+        if not txt or txt.lower() in {"nan", "none", "null", "<na>"}:
+            return 0.0
+        # Ambos: o separador mais à direita é o decimal.
+        if "," in txt and "." in txt:
+            if txt.rfind(",") > txt.rfind("."):
+                txt = txt.replace(".", "").replace(",", ".")
+            else:
+                txt = txt.replace(",", "")
+        elif "," in txt:
+            # Fonte pt-BR: vírgula decimal, sem descartar casas.
+            txt = txt.replace(",", ".")
+        elif txt.count(".") > 1:
+            # Único caso inequívoco de separador de milhar por ponto:
+            # múltiplos blocos de três dígitos, como 1.234.567.
+            import re
+            if re.fullmatch(r"[+-]?\\d{1,3}(?:\\.\\d{3})+", txt):
+                txt = txt.replace(".", "")
+        try:
+            return float(txt)
+        except (ValueError, OverflowError):
+            return 0.0
+
+    return serie.map(parse).astype(float)
 
 
 def _validar_posicoes(df: pd.DataFrame, quantidade_colunas: int, origem: str) -> list[str]:
