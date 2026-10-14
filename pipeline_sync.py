@@ -103,6 +103,9 @@ def get_state(report_type: str) -> dict:
         cfg["derived_key"],
     )
     versions = central.source_versions(source_status, cfg["sources"])
+    if report_type == "Relatório Geral":
+        # Reprocessar as bases já existentes com a antecipação de 30 dias.
+        versions["revisao_calculo_relatorio_geral"] = 1
     if report_type == "Saldo em Estoque":
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
