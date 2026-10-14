@@ -456,7 +456,13 @@ def processar_relatorio_geral(
     )
 
     hoje = date.today()
-    semanas = agrupado["_DATA_MRP_RESOLVIDA"].map(lambda valor: _semana_operacional(valor, hoje))
+    # Mantém a data original do PCP no relatório, antecipando somente
+    # o cálculo da SEMANA DE NECESSIDADE em 30 dias corridos.
+    # Datas de necessidade vencidas/ausentes continuam na semana atual.
+    datas_necessidade = agrupado["_DATA_MRP_RESOLVIDA"].map(
+        lambda valor: valor - pd.Timedelta(days=30) if pd.notna(valor) else pd.NaT
+    )
+    semanas = datas_necessidade.map(lambda valor: _semana_operacional(valor, hoje))
     agrupado["SEMANA DE NECESSIDADE"] = semanas.map(lambda x: x[0])
     agrupado["PERIODO DA SEMANA"] = semanas.map(lambda x: x[1])
 
