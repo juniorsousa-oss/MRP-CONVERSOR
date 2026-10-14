@@ -104,8 +104,9 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Reprocessar as bases já existentes com a antecipação de 30 dias.
-        versions["revisao_calculo_relatorio_geral"] = 1
+        # Revisão 2: refaz a base publicada para substituir as semanas
+        # anteriores ao desconto de 30 dias, mesmo sem novos arquivos do PCP.
+        versions["revisao_calculo_relatorio_geral"] = 2
     if report_type == "Saldo em Estoque":
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
