@@ -44,6 +44,7 @@ from PIL import Image
 
 import central_data as central
 import pipeline_sync as pipelines
+from conversores.semanas import versao_semana_operacional
 
 ROOT = Path(__file__).parent
 FAVICON = ROOT / "favicon.png.png"
@@ -282,7 +283,11 @@ def excel_bytes(frame: pd.DataFrame, sheet_name: str) -> bytes:
 
 
 def ensure_all_bases_ready() -> dict[str, dict]:
-    if st.session_state.get("_mrp_converter_boot_done"):
+    semana_atual = versao_semana_operacional()
+    if (
+        st.session_state.get("_mrp_converter_boot_done")
+        and st.session_state.get("_mrp_converter_boot_week") == semana_atual
+    ):
         return st.session_state.get("_mrp_converter_boot_results") or {}
 
     with st.spinner("ATUALIZANDO TODAS AS BASES DO CONVERSOR MRP..."):
@@ -293,6 +298,7 @@ def ensure_all_bases_ready() -> dict[str, dict]:
     st.session_state["_mrp_converter_boot_results"] = results
     st.session_state["_mrp_converter_warmed_rows"] = warmed
     st.session_state["_mrp_converter_boot_done"] = True
+    st.session_state["_mrp_converter_boot_week"] = semana_atual
     return results
 
 

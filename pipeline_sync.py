@@ -15,6 +15,7 @@ from conversores.compras import processar_compras
 from conversores.estoque import processar_estoque
 from conversores.relatorio_geral import processar_relatorio_geral
 from conversores.tc_tp import processar_tc_tp
+from conversores.semanas import versao_semana_operacional
 
 ROOT = Path(__file__).parent
 CONFIG_ENDERECOS = ROOT / "config" / "enderecos_nao_disponiveis.json"
@@ -111,6 +112,11 @@ def get_state(report_type: str) -> dict:
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
         versions["revisao_calculo_estoque"] = 2
+    if report_type == "MRP — TC/TP":
+        # Reprocessa na primeira execução de cada nova semana operacional
+        # (domingo a sábado), mesmo sem alteração das fontes PMP e H001.
+        # O controle de versões da Central aceita somente inteiros.
+        versions["semana_operacional_inicio"] = versao_semana_operacional()
     ready = central.all_sources_available(source_status, cfg["sources"])
     stale = ready and central.needs_reprocess(versions, derived_meta)
     return {
