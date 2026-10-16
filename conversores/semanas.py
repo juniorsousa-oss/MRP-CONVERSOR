@@ -1,8 +1,28 @@
 """Chave cronológica de semanas operacionais (domingo a sábado)."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+
+FUSO_SETTA = ZoneInfo("America/Sao_Paulo")
+
+
+def hoje_setta() -> date:
+    """Data atual da SETTA, independente do fuso do servidor."""
+    return datetime.now(FUSO_SETTA).date()
+
+
+def inicio_semana_operacional(hoje: date | None = None) -> date:
+    """Domingo inicial da semana operacional (domingo a sábado)."""
+    referencia = hoje if hoje is not None else hoje_setta()
+    return referencia - timedelta(days=(referencia.weekday() + 1) % 7)
+
+
+def versao_semana_operacional(hoje: date | None = None) -> int:
+    """Marcador inteiro YYYYMMDD do domingo, para controle de reprocessamento."""
+    return int(inicio_semana_operacional(hoje).strftime("%Y%m%d"))
 
 
 def semana_operacional(valor, hoje=None, sem_data_usa_hoje=False):
