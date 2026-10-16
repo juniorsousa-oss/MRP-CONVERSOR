@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from conversores.semanas import semana_operacional
+from conversores.semanas import hoje_setta, semana_operacional
 
 
 def _texto(valor):
@@ -320,7 +320,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         lambda x: x - pd.Timedelta(days=30) if pd.notna(x) else pd.NaT
     )
 
-    hoje = date.today()
+    hoje = hoje_setta()
 
     semanas_entrega = base["DATA DE ENTREGA"].map(lambda x: _semana(x, hoje))
     base["SEMANA DE ENTREGA"] = semanas_entrega.map(lambda x: x[0])
