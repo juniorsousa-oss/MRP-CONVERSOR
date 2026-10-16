@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from conversores.semanas import semana_operacional
+from conversores.semanas import hoje_setta, semana_operacional
 
 COLUNAS_OBRIGATORIAS = [
     "Projeto",
@@ -455,7 +455,7 @@ def processar_relatorio_geral(
         lambda op: mapa022.get(op, pd.NaT) if op else pd.NaT
     )
 
-    hoje = date.today()
+    hoje = hoje_setta()
     # Mantém a data original do PCP no relatório, antecipando somente
     # o cálculo da SEMANA DE NECESSIDADE em 30 dias corridos.
     # Datas de necessidade vencidas/ausentes continuam na semana atual.

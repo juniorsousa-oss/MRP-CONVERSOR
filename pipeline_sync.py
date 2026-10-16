@@ -112,9 +112,10 @@ def get_state(report_type: str) -> dict:
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
         versions["revisao_calculo_estoque"] = 2
-    if report_type == "MRP — TC/TP":
-        # Reprocessa na primeira execução de cada nova semana operacional
-        # (domingo a sábado), mesmo sem alteração das fontes PMP e H001.
+    if report_type in {"Relatório Geral", "Compras — S.C + P.C + Pré-nota", "MRP — TC/TP"}:
+        # Estes relatórios reenquadram datas vencidas na semana atual.
+        # Uma nova semana operacional (domingo a sábado) muda a versão
+        # lógica e dispara recálculo, mesmo sem nova carga das fontes.
         # O controle de versões da Central aceita somente inteiros.
         versions["semana_operacional_inicio"] = versao_semana_operacional()
     ready = central.all_sources_available(source_status, cfg["sources"])

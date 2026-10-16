@@ -32,7 +32,7 @@ def semana_operacional(valor, hoje=None, sem_data_usa_hoje=False):
     datas ausentes são alocadas na semana atual. A semana que atravessa o
     réveillon pertence ao ano do domingo em que começou.
     """
-    hoje = hoje or date.today()
+    hoje = hoje if hoje is not None else hoje_setta()
     data = pd.to_datetime(valor, errors="coerce", dayfirst=True)
 
     if pd.isna(data):

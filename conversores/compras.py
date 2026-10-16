@@ -1,6 +1,6 @@
 import pandas as pd
 
-from conversores.semanas import semana_operacional
+from conversores.semanas import hoje_setta, semana_operacional
 from datetime import date, timedelta
 
 CC_ALVO = "600307"
@@ -46,7 +46,7 @@ def _semana_atendimento(valor, hoje=None):
 
 def _adicionar_info_semanal(base, coluna_data, coluna_quantidade, prefixo):
     """Adiciona semana, período e total semanal sem alterar a data original."""
-    hoje = date.today()
+    hoje = hoje_setta()
     semanas = base[coluna_data].map(lambda x: _semana_atendimento(x, hoje))
     base[f"SEMANA DE ATENDIMENTO {prefixo}"] = semanas.map(lambda x: x[0])
     base[f"PERIODO DA SEMANA {prefixo}"] = semanas.map(lambda x: x[1])
