@@ -449,20 +449,75 @@ def processar_relatorio_geral(
             "para avaliação administrativa."
         )
 
-    projetos, materiais = [], []
+
+    # Qualquer problema de chave é localizado na linha original.
+    # Linhas afetadas vão para uma base separada de auditoria, nunca
+    # são publicadas como materiais do MRP com chaves falsas ou vazias.
+    df["_LINHA_FONTE"] = df.index.to_series().astype("int64") + 2
+    df["_PROJETO_FONTE"] = df["Projeto"].map(_texto)
+    df["_CODIGO_FONTE"] = df["Código"].map(_texto)
+    projetos, materiais, problemas_por_linha = [], [], []
     for indice, (projeto, codigo) in zip(df.index, zip(df["Projeto"], df["Código"])):
-        pos = int(indice) + 2  # preservar a linha original mesmo após filtrar rodapés
-        projetos.append(_normalizar_codigo(projeto, 11, "Projeto", erros, pos))
-        materiais.append(_normalizar_codigo(codigo, 8, "Código", erros, pos))
+        pos = int(indice) + 2
+        problemas: list[str] = []
+        projetos.append(_normalizar_codigo(projeto, 11, "Projeto", problemas, pos))
+        materiais.append(_normalizar_codigo(codigo, 8, "Código", problemas, pos))
+        problemas_por_linha.append(" | ".join(problemas))
 
     df["Projeto"] = projetos
     df["Código"] = materiais
-    df["COD_MRP"] = df["Projeto"] + "_" + df["Código"]
+    df["_MOTIVO_INCONSISTENCIA"] = problemas_por_linha
     df["Última solicitação"] = _data(df["Última solicitação"])
     df["Data de separação"] = _data(df["Data de separação"])
     df["Data de conferência"] = _data(df["Data de conferência"])
     df["Qtd. necessária"] = _numero(df["Qtd. necessária"])
     df["Qtd. atendida"] = _numero(df["Qtd. atendida"])
+
+    linhas_invalidas = df["_MOTIVO_INCONSISTENCIA"].ne("")
+    quarentena = df.loc[linhas_invalidas].copy()
+    if not quarentena.empty:
+        quarentena["Pendência"] = (
+            quarentena["Qtd. necessária"] - quarentena["Qtd. atendida"]
+        )
+        quarentena["Status"] = "PENDENTE DE REGULARIZAÇÃO"
+        quarentena = quarentena.rename(
+            columns={
+                "_LINHA_FONTE": "Linha de origem",
+                "_PROJETO_FONTE": "Projeto informado",
+                "_CODIGO_FONTE": "Código informado",
+                "_MOTIVO_INCONSISTENCIA": "Motivo",
+            }
+        )
+        campos_auditoria = [
+            "Linha de origem", "Projeto informado", "Código informado",
+            "Descrição", "Qtd. necessária", "Qtd. atendida", "Pendência",
+            "Última solicitação", "Motivo", "Status",
+            "ORIGEM DO CÓDIGO", "DESCRIÇÃO REFERÊNCIA CADASTROS",
+        ]
+        quarentena = quarentena[campos_auditoria].copy()
+        qtd_pendente = float(quarentena["Pendência"].sum())
+        avisos.append(
+            f"ATENÇÃO: {len(quarentena)} linha(s) com chave de material "
+            "inválida foram isoladas para conferência, sem bloquear "
+            f"os demais materiais; pendência fora do MRP = {qtd_pendente:g} unidade(s). "
+            "Consulte INCONSISTÊNCIAS DO RELATÓRIO GERAL."
+        )
+
+    df = df.loc[~linhas_invalidas].copy()
+    if df.empty:
+        erros.append(
+            "Nenhum material com Projeto e Código válidos foi encontrado. "
+            "Publicação interrompida para não substituir a base por dados vazios."
+        )
+        return {
+            "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
+            "inconsistencias": quarentena, "erros": erros, "avisos": avisos,
+            "sugestoes_cadastro": pd.DataFrame(sugestoes_cadastros),
+            "codigos_provisorios": pd.DataFrame(trilha_cadastros),
+            "metricas": {"linhas_brutas": len(bruto), "linhas_agrupadas": 0, "erros": len(erros)},
+        }
+
+    df["COD_MRP"] = df["Projeto"] + "_" + df["Código"]
 
     duplicadas = int(df.duplicated("COD_MRP", keep=False).sum())
     grupos_duplicados = int(df.loc[df.duplicated("COD_MRP", keep=False), "COD_MRP"].nunique())
@@ -605,9 +660,12 @@ def processar_relatorio_geral(
         "erros": len(erros),
         "codigos_provisorios": len(trilha_cadastros),
         "codigos_pendentes": len({item["Linha de origem"] for item in sugestoes_cadastros}),
+        "linhas_em_quarentena": len(quarentena),
+        "pendencia_em_quarentena": float(quarentena["Pendência"].sum()) if not quarentena.empty else 0.0,
     }
 
     return {
+        "inconsistencias": quarentena,
         "codigos_provisorios": pd.DataFrame(trilha_cadastros),
         "sugestoes_cadastro": pd.DataFrame(sugestoes_cadastros),
         "tratado": agrupado,
