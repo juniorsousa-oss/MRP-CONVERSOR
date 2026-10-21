@@ -438,8 +438,26 @@ def current_frame(
     )
 
 
+@st.cache_data(show_spinner=False, ttl=90)
+def _cached_inconsistencias_frame(processed_at: str, source_versions_token: str) -> pd.DataFrame:
+    frame, _ = central.download_derived("relatorio_geral_inconsistencias")
+    return frame
+
+
+def inconsistencias_relatorio_geral() -> pd.DataFrame:
+    """Consulta a quarentena persistente da base atual, não erros da sessão."""
+    status = central.derived_status(["relatorio_geral_inconsistencias"])
+    meta = status.get("relatorio_geral_inconsistencias") or {}
+    if not meta.get("available"):
+        return pd.DataFrame()
+    processed_at = str(meta.get("processed_at") or "")
+    token = json.dumps(meta.get("source_versions") or {}, sort_keys=True)
+    return _cached_inconsistencias_frame(processed_at, token)
+
+
 def clear_current_frame_cache() -> None:
     _cached_current_frame.clear()
+    _cached_inconsistencias_frame.clear()
 
 
 def _compact_state(state: dict) -> dict:
