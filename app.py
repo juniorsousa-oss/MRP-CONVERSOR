@@ -1170,7 +1170,7 @@ def render_status_api() -> None:
                                 if isinstance(_dados, pd.DataFrame) and not _dados.empty and "Código" in _dados.columns:
                                     _codigo = _dados["Código"].astype("string").fillna("").str.strip()
                                     _inconsistentes = _dados.loc[
-                                        ~_codigo.str.fullmatch(r"\\d{8}", na=False)
+                                        ~_codigo.str.fullmatch(r"\d{8}", na=False)
                                     ].copy()
                                     if not _inconsistentes.empty:
                                         _colunas_debug = [
