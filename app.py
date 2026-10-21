@@ -1187,6 +1187,26 @@ def render_status_api() -> None:
                                 # Não excluir silenciosamente materiais com código
                                 # faltante: disponibilizar diagnóstico verificável.
                                 _forced_result = forced.get("result") or {}
+                                _candidatos = _forced_result.get("sugestoes_cadastro")
+                                if isinstance(_candidatos, pd.DataFrame) and not _candidatos.empty:
+                                    with st.expander(
+                                        "CANDIDATOS DO CADASTROS — CONFERÊNCIA NECESSÁRIA",
+                                        expanded=True,
+                                    ):
+                                        st.info(
+                                            "Candidatos são sugestões, não códigos confirmados. "
+                                            "Associe apenas após verificar a correspondência "
+                                            "do material e corrigir a origem no Protheus."
+                                        )
+                                        st.dataframe(_candidatos, use_container_width=True, hide_index=True)
+                                        st.download_button(
+                                            "BAIXAR CANDIDATOS (CSV)",
+                                            _candidatos.to_csv(index=False, sep=";").encode("utf-8-sig"),
+                                            "mrp_candidatos_cadastros.csv",
+                                            mime="text/csv",
+                                            use_container_width=True,
+                                            key="mrp_candidatos_cadastros_download",
+                                        )
                                 _dados = _forced_result.get("tratado")
                                 if isinstance(_dados, pd.DataFrame) and not _dados.empty and "Código" in _dados.columns:
                                     _codigo = _dados["Código"].astype("string").fillna("").str.strip()
@@ -1222,26 +1242,6 @@ def render_status_api() -> None:
                                                 use_container_width=True,
                                                 key=f"relatorio_inconsistencias_{cfg['derived_key']}",
                                             )
-                                _candidatos = _forced_result.get("sugestoes_cadastro")
-                                if isinstance(_candidatos, pd.DataFrame) and not _candidatos.empty:
-                                    with st.expander(
-                                        "CANDIDATOS DO CADASTROS — CONFERÊNCIA NECESSÁRIA",
-                                        expanded=True,
-                                    ):
-                                        st.info(
-                                            "Candidatos são sugestões, não códigos confirmados. "
-                                            "Associe apenas após verificar a correspondência "
-                                            "do material e corrigir a origem no Protheus."
-                                        )
-                                        st.dataframe(_candidatos, use_container_width=True, hide_index=True)
-                                        st.download_button(
-                                            "BAIXAR CANDIDATOS (CSV)",
-                                            _candidatos.to_csv(index=False, sep=";").encode("utf-8-sig"),
-                                            "mrp_candidatos_cadastros.csv",
-                                            mime="text/csv",
-                                            use_container_width=True,
-                                            key="mrp_candidatos_cadastros_download",
-                                        )
                     except Exception as exc:
                         st.error(f"FALHA NO REPROCESSAMENTO: {exc}")
 
