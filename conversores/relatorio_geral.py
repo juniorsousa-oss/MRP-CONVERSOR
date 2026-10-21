@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from conversores.semanas import hoje_setta, semana_operacional
+from conversores.cadastro_fallback import recuperar_codigos
 
 COLUNAS_OBRIGATORIAS = [
     "Projeto",
@@ -42,6 +43,8 @@ COLUNAS_SAIDA = [
     "PERIODO DA SEMANA",
     "NECESSIDADE DA SEMANA",
     "VINCULAÇÃO DA DATA",
+    "ORIGEM DO CÓDIGO",
+    "DESCRIÇÃO REFERÊNCIA CADASTROS",
 ]
 
 
@@ -336,6 +339,7 @@ def processar_relatorio_geral(
     bruto: pd.DataFrame,
     for001: pd.DataFrame | None = None,
     for022: pd.DataFrame | None = None,
+    cadastros: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     erros: list[str] = []
     avisos: list[str] = []
@@ -422,6 +426,29 @@ def processar_relatorio_geral(
             "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)},
         }
 
+    # A recuperação usa apenas descrições da base CADASTROS oficial, preserva
+    # o código original quando presente e registra a identificação provisória.
+    trilha_cadastros: list[dict[str, Any]] = []
+    sugestoes_cadastros: list[dict[str, Any]] = []
+    if cadastros is not None and df["Código"].map(_texto).eq("").any():
+        df, trilha_cadastros, sugestoes_cadastros = recuperar_codigos(df, cadastros)
+    else:
+        df["ORIGEM DO CÓDIGO"] = "RELATÓRIO GERAL"
+        df["DESCRIÇÃO REFERÊNCIA CADASTROS"] = ""
+
+    if trilha_cadastros:
+        avisos.append(
+            f"CADASTROS: {len(trilha_cadastros)} linha(s) com código "
+            "recuperado provisoriamente; conferir antes de oficializar no ERP."
+        )
+    if sugestoes_cadastros:
+        nao_resolvidas = sorted({item["Linha de origem"] for item in sugestoes_cadastros})
+        avisos.append(
+            f"CADASTROS: {len(nao_resolvidas)} linha(s) com múltiplas ou "
+            "insuficientes correspondências; consulte os candidatos "
+            "para avaliação administrativa."
+        )
+
     projetos, materiais = [], []
     for indice, (projeto, codigo) in zip(df.index, zip(df["Projeto"], df["Código"])):
         pos = int(indice) + 2  # preservar a linha original mesmo após filtrar rodapés
@@ -459,6 +486,8 @@ def processar_relatorio_geral(
                 "Data de separação": ("Data de separação", "max"),
                 "Resp. conferência": ("Resp. conferência", _nomes_unicos),
                 "Data de conferência": ("Data de conferência", "max"),
+                "ORIGEM DO CÓDIGO": ("ORIGEM DO CÓDIGO", _nomes_unicos),
+                "DESCRIÇÃO REFERÊNCIA CADASTROS": ("DESCRIÇÃO REFERÊNCIA CADASTROS", _primeiro_texto),
             },
         )
         .reset_index()
@@ -574,9 +603,13 @@ def processar_relatorio_geral(
         "chaves_unicas": int(df["COD_MRP"].nunique()),
         "linhas_agrupadas": len(agrupado),
         "erros": len(erros),
+        "codigos_provisorios": len(trilha_cadastros),
+        "codigos_pendentes": len({item["Linha de origem"] for item in sugestoes_cadastros}),
     }
 
     return {
+        "codigos_provisorios": pd.DataFrame(trilha_cadastros),
+        "sugestoes_cadastro": pd.DataFrame(sugestoes_cadastros),
         "tratado": agrupado,
         "validacao": validacao,
         "erros": erros,
