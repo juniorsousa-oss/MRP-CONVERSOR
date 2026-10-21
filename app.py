@@ -978,6 +978,54 @@ def source_cards_html(report_type: str, source_state: dict) -> str:
     return '<div class="source-grid">' + "".join(cards) + "</div>"
 
 
+def mostrar_inconsistencias_relatorio_geral(contexto: str) -> None:
+    """Exibe erros não bloqueantes da carga vigente, com exportação auditável."""
+    try:
+        inconsistencias = pipelines.inconsistencias_relatorio_geral()
+    except Exception as exc:
+        st.error(
+            "Não foi possível consultar o diagnóstico de inconsistências "
+            f"da Central de Dados: {exc}"
+        )
+        return
+
+    if inconsistencias.empty:
+        return
+
+    pendentes = pd.to_numeric(
+        inconsistencias.get("Pendência", pd.Series(dtype="float64")),
+        errors="coerce",
+    ).fillna(0).sum()
+    st.warning(
+        f"BASE PUBLICADA COM RESSALVAS: {len(inconsistencias)} registro(s) "
+        f"com código/projeto inválido; {pendentes:g} unidade(s) "
+        "de demanda permanecem fora do MRP até a regularização. "
+        "Os demais materiais foram processados normalmente."
+    )
+    with st.expander(
+        f"INCONSISTÊNCIAS DO RELATÓRIO GERAL ({len(inconsistencias)})",
+        expanded=True,
+    ):
+        st.caption(
+            "Linhas originais preservadas na Central de Dados, sem código "
+            "inventado e sem associação automática insegura. "
+            "Corrija o relatório de origem ou valide um código no CADASTROS."
+        )
+        st.dataframe(
+            inconsistencias,
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.download_button(
+            "BAIXAR INCONSISTÊNCIAS (CSV)",
+            inconsistencias.to_csv(index=False, sep=";").encode("utf-8-sig"),
+            file_name="MRP_Relatorio_Geral_Inconsistencias.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key=f"relatorio_geral_quarentena_{contexto}",
+        )
+
+
 def render_report(report_type: str) -> None:
     cfg = pipelines.config_for(report_type)
 
@@ -1035,6 +1083,9 @@ def render_report(report_type: str) -> None:
         )
         if downloaded_meta:
             derived_meta = downloaded_meta
+
+    if report_type == "Relatório Geral":
+        mostrar_inconsistencias_relatorio_geral("resultado")
 
     if current is not None:
         processed_at = (
@@ -1132,6 +1183,7 @@ def render_status_api() -> None:
                 st.error(f"Falha ao consultar a Central de Dados: {exc}")
 
             if report_type == "Relatório Geral":
+                mostrar_inconsistencias_relatorio_geral("status_api")
                 _rastreio = st.session_state.get("_mrp_codigos_provisorios_auditoria") or []
                 if _rastreio:
                     with st.expander(
@@ -1162,7 +1214,7 @@ def render_status_api() -> None:
                                 report_type,
                                 force=True,
                             )
-                        if forced.get("sync_status") == "PROCESSADO":
+                        if forced.get("sync_status") in {"PROCESSADO", "PROCESSADO_COM_RESSALVAS"}:
                             pipelines.clear_current_frame_cache()
                             st.session_state["_mrp_converter_boot_results"] = pipelines.inspect_all_pipelines()
                             st.session_state["_mrp_converter_boot_done"] = True
@@ -1173,7 +1225,14 @@ def render_status_api() -> None:
                                     if isinstance(_auditoria, pd.DataFrame) and not _auditoria.empty
                                     else []
                                 )
-                            st.success("BASE REPROCESSADA.")
+                            if forced.get("sync_status") == "PROCESSADO_COM_RESSALVAS":
+                                st.warning(
+                                    "BASE REPROCESSADA COM RESSALVAS. "
+                                    "Os materiais com códigos inválidos foram separados "
+                                    "no relatório de inconsistências."
+                                )
+                            else:
+                                st.success("BASE REPROCESSADA.")
                             st.rerun()
                         else:
                             _force_error = str(forced.get("error") or "")
