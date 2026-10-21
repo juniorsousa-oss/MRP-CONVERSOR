@@ -391,7 +391,7 @@ def processar_relatorio_geral(
 
     def _quantidade_vazia_ou_zero(serie: pd.Series) -> pd.Series:
         texto = serie.map(_texto).str.replace(",", ".", regex=False)
-        return texto.eq("") | texto.str.fullmatch(r"0+(?:\\.0+)?", na=False)
+        return texto.eq("") | texto.str.fullmatch(r"0+(?:\.0+)?", na=False)
 
     linhas_estruturais = (
         sem_codigo
