@@ -1163,6 +1163,44 @@ def render_status_api() -> None:
                                     _force_error
                                     or "NÃO FOI POSSÍVEL REPROCESSAR."
                                 )
+                                # Não excluir silenciosamente materiais com código
+                                # faltante: disponibilizar diagnóstico verificável.
+                                _forced_result = forced.get("result") or {}
+                                _dados = _forced_result.get("tratado")
+                                if isinstance(_dados, pd.DataFrame) and not _dados.empty and "Código" in _dados.columns:
+                                    _codigo = _dados["Código"].astype("string").fillna("").str.strip()
+                                    _inconsistentes = _dados.loc[
+                                        ~_codigo.str.fullmatch(r"\\d{8}", na=False)
+                                    ].copy()
+                                    if not _inconsistentes.empty:
+                                        _colunas_debug = [
+                                            "Projeto", "Código", "Descrição",
+                                            "Qtd. necessária", "Qtd. atendida", "Pendência",
+                                            "Última solicitação", "DATA MRP", "DATA CM",
+                                        ]
+                                        _inconsistentes = _inconsistentes[
+                                            [col for col in _colunas_debug if col in _inconsistentes.columns]
+                                        ]
+                                        with st.expander(
+                                            f"REGISTROS SEM CÓDIGO VÁLIDO ({len(_inconsistentes)})",
+                                            expanded=True,
+                                        ):
+                                            st.warning(
+                                                "Estes registros possuem informações na origem. "
+                                                "Verifique se são demandas reais ou totalizadores "
+                                                "antes de descartá-los."
+                                            )
+                                            st.dataframe(_inconsistentes, use_container_width=True, hide_index=True)
+                                            st.download_button(
+                                                "BAIXAR INCONSISTÊNCIAS (CSV)",
+                                                data=_inconsistentes.to_csv(
+                                                    index=False, sep=";"
+                                                ).encode("utf-8-sig"),
+                                                file_name="mrp_relatorio_geral_inconsistencias.csv",
+                                                mime="text/csv",
+                                                use_container_width=True,
+                                                key=f"relatorio_inconsistencias_{cfg['derived_key']}",
+                                            )
                     except Exception as exc:
                         st.error(f"FALHA NO REPROCESSAMENTO: {exc}")
 
