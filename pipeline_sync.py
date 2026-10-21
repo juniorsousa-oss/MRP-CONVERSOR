@@ -302,6 +302,7 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
                 **state,
                 "sync_status": "ERRO",
                 "result": result,
+                "error": " | ".join(str(item) for item in errors[:10]),
             }
 
         treated = result.get("tratado")
