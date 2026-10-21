@@ -106,9 +106,9 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Revisão 4: candidatos CADASTROS incluem descrições extensas que
-        # contenham o termo do relatório, sem vinculação ambígua automática.
-        versions["revisao_calculo_relatorio_geral"] = 4
+        # Revisão 5: publica somente chaves válidas, com auditoria persistente
+        # das demandas inconsistentes na base derivada separada.
+        versions["revisao_calculo_relatorio_geral"] = 5
     if report_type == "Saldo em Estoque":
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
@@ -311,15 +311,39 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
         if not isinstance(treated, pd.DataFrame):
             raise RuntimeError("O conversor não retornou uma base tratada válida.")
 
+        # Quarentena persistente: os itens sem chave válida continuam
+        # acessíveis para conferência, sem contaminar a demanda do MRP.
+        quarantined = pd.DataFrame()
+        if report_type == "Relatório Geral":
+            quarantined = result.get("inconsistencias")
+            if not isinstance(quarantined, pd.DataFrame):
+                raise RuntimeError("Relatório Geral sem diagnóstico de inconsistências.")
+            central.publish_derived(
+                "relatorio_geral_inconsistencias",
+                quarantined,
+                state["versions"],
+            )
+
         published = central.publish_derived(
             cfg["derived_key"],
             treated,
             state["versions"],
         )
+        has_warnings = not quarantined.empty
+        warning_message = ""
+        if has_warnings:
+            pending_total = float(quarantined["Pendência"].sum())
+            warning_message = (
+                f"CONCLUÍDO COM RESSALVAS: {len(quarantined)} registro(s) "
+                f"em quarentena com {pending_total:g} unidade(s) pendente(s); "
+                "base principal publicada apenas com materiais válidos. "
+                "Consulte INCONSISTÊNCIAS DO RELATÓRIO GERAL."
+            )
         central.pipeline_finish(
             run_id,
-            "CONCLUÍDO",
+            "CONCLUÍDO_COM_RESSALVAS" if has_warnings else "CONCLUÍDO",
             rows_count=len(treated),
+            message=warning_message,
         )
 
         refreshed = {
@@ -332,7 +356,7 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
         }
         return {
             **refreshed,
-            "sync_status": "PROCESSADO",
+            "sync_status": "PROCESSADO_COM_RESSALVAS" if has_warnings else "PROCESSADO",
             "result": result,
             "published": published,
         }
