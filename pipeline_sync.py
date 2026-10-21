@@ -25,11 +25,12 @@ PIPELINES = {
         "pipeline_key": "relatorio_geral_tratado",
         "derived_key": "relatorio_geral_tratado",
         "derived_name": "RELATÓRIO GERAL TRATADO",
-        "sources": ["relatorio_geral", "for001", "for022"],
+        "sources": ["relatorio_geral", "for001", "for022", "cadastros"],
         "labels": {
             "relatorio_geral": "RELATÓRIO GERAL",
             "for001": "FOR001",
             "for022": "FOR022",
+            "cadastros": "CADASTROS",
         },
     },
     "Saldo em Estoque": {
@@ -105,9 +106,9 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Revisão 2: refaz a base publicada para substituir as semanas
-        # anteriores ao desconto de 30 dias, mesmo sem novos arquivos do PCP.
-        versions["revisao_calculo_relatorio_geral"] = 2
+        # Revisão 3: inclui a correção provisória de códigos com CADASTROS.
+        # O cadastro passa a integrar a versão lógica do relatório derivado.
+        versions["revisao_calculo_relatorio_geral"] = 3
     if report_type == "Saldo em Estoque":
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
@@ -242,7 +243,8 @@ def _process(report_type: str, files: dict[str, dict]) -> dict:
         bruto = _source_frame(files["relatorio_geral"], sheet_name="Geral")
         for001 = _source_frame(files["for001"], sheet_name="PAINEL", header=4)
         for022 = _source_frame(files["for022"], sheet_name="Datas esperadas", header=0)
-        return processar_relatorio_geral(bruto, for001, for022)
+        cadastros = _source_frame(files["cadastros"], header=1)
+        return processar_relatorio_geral(bruto, for001, for022, cadastros=cadastros)
 
     if report_type == "Saldo em Estoque":
         analitico = _source_frame(files["analitico"], header=1)
