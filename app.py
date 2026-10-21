@@ -693,7 +693,7 @@ st.markdown(
     .section-band-note{margin-top:.22rem;color:#667085;font-size:.75rem;line-height:1.35}
     .topic-divider{height:1px;background:#cbd5e1;margin:1.55rem 0 1.05rem;width:100%}
 
-    .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.72rem;margin:.25rem 0 1rem}
+    .source-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.72rem;margin:.25rem 0 1rem}
     .source-card{position:relative;background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:.82rem .9rem;box-shadow:0 3px 12px rgba(15,23,42,.035);overflow:hidden;min-height:96px}
     .source-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent,#64748b)}
     .source-name{font-size:.69rem;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.035em}
@@ -1131,6 +1131,20 @@ def render_status_api() -> None:
                 state = {"sources": {}, "derived": {}}
                 st.error(f"Falha ao consultar a Central de Dados: {exc}")
 
+            if report_type == "Relatório Geral":
+                _rastreio = st.session_state.get("_mrp_codigos_provisorios_auditoria") or []
+                if _rastreio:
+                    with st.expander(
+                        f"CÓDIGOS PROVISÓRIOS DO CADASTROS ({len(_rastreio)})",
+                        expanded=True,
+                    ):
+                        st.warning(
+                            "Os códigos foram recuperados provisoriamente. "
+                            "Conferir e ajustar a fonte no Protheus. "
+                            "Na próxima carga, o código da origem terá prioridade."
+                        )
+                        st.dataframe(pd.DataFrame(_rastreio), hide_index=True, use_container_width=True)
+
             with st.expander(
                 f"CONTINGÊNCIA · {report_type.upper()}",
                 expanded=False,
@@ -1152,6 +1166,13 @@ def render_status_api() -> None:
                             pipelines.clear_current_frame_cache()
                             st.session_state["_mrp_converter_boot_results"] = pipelines.inspect_all_pipelines()
                             st.session_state["_mrp_converter_boot_done"] = True
+                            if report_type == "Relatório Geral":
+                                _auditoria = (forced.get("result") or {}).get("codigos_provisorios")
+                                st.session_state["_mrp_codigos_provisorios_auditoria"] = (
+                                    _auditoria.to_dict(orient="records")
+                                    if isinstance(_auditoria, pd.DataFrame) and not _auditoria.empty
+                                    else []
+                                )
                             st.success("BASE REPROCESSADA.")
                             st.rerun()
                         else:
@@ -1201,6 +1222,26 @@ def render_status_api() -> None:
                                                 use_container_width=True,
                                                 key=f"relatorio_inconsistencias_{cfg['derived_key']}",
                                             )
+                                _candidatos = _forced_result.get("sugestoes_cadastro")
+                                if isinstance(_candidatos, pd.DataFrame) and not _candidatos.empty:
+                                    with st.expander(
+                                        "CANDIDATOS DO CADASTROS — CONFERÊNCIA NECESSÁRIA",
+                                        expanded=True,
+                                    ):
+                                        st.info(
+                                            "Candidatos são sugestões, não códigos confirmados. "
+                                            "Associe apenas após verificar a correspondência "
+                                            "do material e corrigir a origem no Protheus."
+                                        )
+                                        st.dataframe(_candidatos, use_container_width=True, hide_index=True)
+                                        st.download_button(
+                                            "BAIXAR CANDIDATOS (CSV)",
+                                            _candidatos.to_csv(index=False, sep=";").encode("utf-8-sig"),
+                                            "mrp_candidatos_cadastros.csv",
+                                            mime="text/csv",
+                                            use_container_width=True,
+                                            key="mrp_candidatos_cadastros_download",
+                                        )
                     except Exception as exc:
                         st.error(f"FALHA NO REPROCESSAMENTO: {exc}")
 
