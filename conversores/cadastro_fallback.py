@@ -85,23 +85,46 @@ def _classificar(
             {**c, "similaridade": 100.0} for c in exatos[:8]
         ]
 
-    # Para descrição curta e genérica (ex. BASCULANTE), somente igualdade
-    # exata permite preenchimento automático. Demais resultados são sugestões.
+    # Uma descrição curta pode corresponder a um termo no meio de uma
+    # descrição extensa: "BASCULANTE" dentro de "CONJUNTO ... BASCULANTE".
+    # A similaridade global é baixa nesses casos, mas a sugestão é relevante.
+    # Não aplicar a correspondência automaticamente para termos genéricos.
     palavras = alvo.split()
     numeros_alvo = _numeros(alvo)
     proximos: list[dict[str, Any]] = []
     for item in catalogo:
         nome = item["normalizada"]
-        if alvo[0] != nome[0] and not set(palavras).intersection(nome.split()):
-            continue
+        tokens = set(nome.split())
         nota = SequenceMatcher(None, alvo, nome).ratio()
-        if nota < 0.63:
+        palavra_completa = all(p in tokens for p in palavras)
+        trecho_delimitado = bool(
+            re.search(r"(?<![A-Z0-9])" + re.escape(alvo) + r"(?![A-Z0-9])", nome)
+        )
+        # Quando há uma palavra exata, exibir mesmo se a descrição for longa.
+        # Se não houver, incluir somente opções textualmente próximas.
+        if not (palavra_completa or trecho_delimitado or nota >= 0.63):
             continue
-        proximos.append({**item, "similaridade": round(nota * 100, 1)})
-    proximos.sort(key=lambda c: (-c["similaridade"], c["codigo"]))
-    sugestoes = proximos[:8]
+        proximos.append({
+            **item,
+            "similaridade": round(nota * 100, 1),
+            "tipo_busca": (
+                "CONTEM_TERMO_COMPLETO"
+                if palavra_completa or trecho_delimitado
+                else "SIMILARIDADE_TEXTUAL"
+            ),
+            "_prioridade": int(palavra_completa or trecho_delimitado),
+        })
+    proximos.sort(
+        key=lambda c: (-c["_prioridade"], -c["similaridade"], c["codigo"])
+    )
+    sugestoes = [
+        {key: value for key, value in c.items() if key != "_prioridade"}
+        for c in proximos[:20]
+    ]
 
-    if len(palavras) < 2 or not sugestoes:
+    if len(palavras) < 2:
+        return "", "DESCRICAO_GENERICA_REQUER_CONFERENCIA", sugestoes
+    if not sugestoes:
         return "", "SEM_CORRESPONDENCIA_UNICA", sugestoes
 
     primeiro = sugestoes[0]
