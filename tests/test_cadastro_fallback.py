@@ -74,6 +74,17 @@ class CadastroFallbackTests(unittest.TestCase):
         self.assertFalse(auditoria)
         self.assertTrue(candidatos)
 
+    def test_termo_generico_em_descricao_extensa_e_sugestao_apenas(self):
+        cadastro = self.cadastro([
+            ("00543210", "CONJUNTO ESTRUTURAL PARA ACIONAMENTO BASCULANTE SUPERIOR COMPLETO", "MP"),
+            ("00543211", "CONECTOR CONTROLE ELETRICO", "MP"),
+        ])
+        atualizado, auditoria, candidatos = recuperar_codigos(self.bruto, cadastro)
+        self.assertEqual(auditoria, [])
+        self.assertTrue(atualizado["Código"].eq("").all())
+        self.assertEqual({item["Código candidato"] for item in candidatos}, {"00543210"})
+        self.assertTrue(all(item["Situação"] == "DESCRICAO_GENERICA_REQUER_CONFERENCIA" for item in candidatos))
+
     def test_nao_substitui_codigo_fonte(self):
         original = self.bruto.copy()
         original.loc[0, "Código"] = "00000088"
