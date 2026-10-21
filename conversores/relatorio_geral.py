@@ -376,8 +376,55 @@ def processar_relatorio_geral(
     df = bruto.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
+    # Relatórios exportados podem conter linhas de separação/rodapé sem
+    # qualquer material. Não são demandas e não devem bloquear a base inteira.
+    # A regra é conservadora: qualquer descrição, quantidade não-zero,
+    # data ou responsável preserva a linha para validação (erro explícito).
+    sem_codigo = df["Código"].map(_texto).eq("")
+    campos_textuais = [
+        "Descrição", "Última solicitação", "Resp. separação",
+        "Data de separação", "Resp. conferência", "Data de conferência",
+    ]
+    sem_outros_dados = pd.Series(True, index=df.index, dtype=bool)
+    for coluna in campos_textuais:
+        sem_outros_dados &= df[coluna].map(_texto).eq("")
+
+    def _quantidade_vazia_ou_zero(serie: pd.Series) -> pd.Series:
+        texto = serie.map(_texto).str.replace(",", ".", regex=False)
+        return texto.eq("") | texto.str.fullmatch(r"0+(?:\\.0+)?", na=False)
+
+    linhas_estruturais = (
+        sem_codigo
+        & sem_outros_dados
+        & _quantidade_vazia_ou_zero(df["Qtd. necessária"])
+        & _quantidade_vazia_ou_zero(df["Qtd. atendida"])
+    )
+    if linhas_estruturais.any():
+        linhas_originais = [int(indice) + 2 for indice in df.index[linhas_estruturais]]
+        avisos.append(
+            "Relatório Geral: "
+            + str(len(linhas_originais))
+            + " linha(s) sem código e sem dados de material foram ignoradas "
+              "como separadores/rodapés (linhas "
+            + ", ".join(map(str, linhas_originais[:20]))
+            + (", ..." if len(linhas_originais) > 20 else "")
+            + "). Nenhuma demanda com quantidade ou descrição foi descartada."
+        )
+        df = df.loc[~linhas_estruturais].copy()
+
+    if df.empty:
+        erros.append("Relatório Geral: nenhuma linha de material válida para processar.")
+        return {
+            "tratado": pd.DataFrame(),
+            "validacao": pd.DataFrame(),
+            "erros": erros,
+            "avisos": avisos,
+            "metricas": {"linhas_brutas": len(bruto), "chaves_unicas": 0, "linhas_agrupadas": 0, "erros": len(erros)},
+        }
+
     projetos, materiais = [], []
-    for pos, (projeto, codigo) in enumerate(zip(df["Projeto"], df["Código"]), start=2):
+    for indice, (projeto, codigo) in zip(df.index, zip(df["Projeto"], df["Código"])):
+        pos = int(indice) + 2  # preservar a linha original mesmo após filtrar rodapés
         projetos.append(_normalizar_codigo(projeto, 11, "Projeto", erros, pos))
         materiais.append(_normalizar_codigo(codigo, 8, "Código", erros, pos))
 
