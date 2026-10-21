@@ -91,7 +91,7 @@ class TestRelatorioGeralSemCodigo(unittest.TestCase):
             "26028001001", "26028901001",
         })
         self.assertEqual(int(result["tratado"]["Pendência"].sum()), 8)
-        self.assertTrue(result["tratado"]["Código"].str.fullmatch(r"\\d{8}").all())
+        self.assertTrue(result["tratado"]["Código"].str.fullmatch(r"\d{8}").all())
 
     def test_100_por_cento_invalido_nao_sobrescreve_base_existente(self):
         invalida = dict(self.linha)
