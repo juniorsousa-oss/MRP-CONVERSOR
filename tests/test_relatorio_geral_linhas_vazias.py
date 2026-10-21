@@ -46,6 +46,7 @@ class TestRelatorioGeralSemCodigo(unittest.TestCase):
         invalida = dict(self.linha)
         invalida["Código"] = ""
         invalida["Qtd. necessária"] = 8
+        invalida["Qtd. atendida"] = 0
         result = self._run([self.linha, invalida])
         self.assertEqual(result["erros"], [])
         self.assertEqual(len(result["tratado"]), 1)
