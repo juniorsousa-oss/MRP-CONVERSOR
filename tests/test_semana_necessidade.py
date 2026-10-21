@@ -32,8 +32,8 @@ class TestSemanaDeNecessidade(unittest.TestCase):
         for022 = pd.DataFrame([[
             "26031401001", *[""] * 20, "28/11/2026",
         ]], columns=[f"COL_{i}" for i in range(22)])
-        with patch("conversores.relatorio_geral.date") as data_mock:
-            data_mock.today.return_value = date(2026, 10, 14)
+        # Fixar o relógio do conversor; date.today() não altera hoje_setta().
+        with patch("conversores.relatorio_geral.hoje_setta", return_value=date(2026, 10, 14)):
             return processar_relatorio_geral(bruto, for001, for022)
 
     def test_op_26031401001_antecipa_30_dias(self):
