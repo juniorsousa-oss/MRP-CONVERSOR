@@ -106,9 +106,9 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Revisão 3: inclui a correção provisória de códigos com CADASTROS.
-        # O cadastro passa a integrar a versão lógica do relatório derivado.
-        versions["revisao_calculo_relatorio_geral"] = 3
+        # Revisão 4: candidatos CADASTROS incluem descrições extensas que
+        # contenham o termo do relatório, sem vinculação ambígua automática.
+        versions["revisao_calculo_relatorio_geral"] = 4
     if report_type == "Saldo em Estoque":
         # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
         # reconstrução da base mesmo com versões iguais do ERP.
