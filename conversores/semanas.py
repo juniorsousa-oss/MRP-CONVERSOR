@@ -51,11 +51,11 @@ def interpretar_data_setta(valor):
     texto = str(valor).strip()
     if not texto or texto.upper() in {"NAN", "NAT", "NONE", "NI", "NA", "N/A"}:
         return pd.NaT
-    if re.match(r"^\\d{4}-\\d{2}-\\d{2}(?:$|[T\\s])", texto):
+    if re.match(r"^\d{4}-\d{2}-\d{2}(?:$|[T\s])", texto):
         return pd.to_datetime(texto[:10], format="%Y-%m-%d", errors="coerce")
-    if re.match(r"^\\d{2}/\\d{2}/\\d{4}(?:$|\\s)", texto):
+    if re.match(r"^\d{2}/\d{2}/\d{4}(?:$|\s)", texto):
         return pd.to_datetime(texto[:10], format="%d/%m/%Y", errors="coerce")
-    if re.match(r"^\\d{4}/\\d{2}/\\d{2}(?:$|\\s)", texto):
+    if re.match(r"^\d{4}/\d{2}/\d{2}(?:$|\s)", texto):
         return pd.to_datetime(texto[:10], format="%Y/%m/%d", errors="coerce")
     return pd.NaT
 
