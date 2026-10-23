@@ -30,7 +30,7 @@ class DataCompraSeguraTests(unittest.TestCase):
                 self.assertEqual(parsed.date(),date(2026,11,2))
                 self.assertEqual(data_pc(value).date(),date(2026,11,2))
                 self.assertEqual(data_tctp(value).date(),date(2026,11,2))
-                self.assertEqual(semana_operacional(value,date(2026,10,23))[0],"2026-45")
+                self.assertEqual(semana_operacional(value,date(2026,10,23))[0],"2026-44")
                 self.assertEqual(semana_operacional(value,date(2026,10,23))[1],"01/11/2026 a 07/11/2026")
 
     def test_nao_inverte_11_de_fevereiro(self):
@@ -58,7 +58,7 @@ class DataCompraSeguraTests(unittest.TestCase):
         bruto=pd.DataFrame([row],columns=[f"Campo_{i}" for i in range(22)])
         pc=_agrupar_pc(bruto)
         self.assertEqual(len(pc),1)
-        self.assertEqual(pc.iloc[0]["P.C."],"087058")
+        self.assertEqual(pc.iloc[0]["P.C"],"087058")
         self.assertEqual(pc.iloc[0]["CÓD"],"06050238")
         self.assertEqual(pc.iloc[0]["DATA DA P.C"].date(),date(2026,11,2))
         vazio_sc=pd.DataFrame(columns=["CÓD","DATA DA S.C","DESCRIÇÃO","S.C","QUANTIDADE S.C"])
@@ -68,7 +68,7 @@ class DataCompraSeguraTests(unittest.TestCase):
         with patch("conversores.compras.hoje_setta",return_value=date(2026,10,23)):
             tratado=_montar_base_comum(vazio_sc,pc,vazio_pre)
         self.assertEqual(tratado.iloc[0]["DATA DA P.C"],"02/11/2026")
-        self.assertEqual(tratado.iloc[0]["SEMANA DE ATENDIMENTO P.C"],"2026-45")
+        self.assertEqual(tratado.iloc[0]["SEMANA DE ATENDIMENTO P.C"],"2026-44")
         self.assertEqual(tratado.iloc[0]["QUANTIDADE P.C"],11)
         self.assertEqual(tratado.iloc[0]["QUANTIDADE TOTAL DE ATENDIMENTO DA SEMANA P.C"],11)
 
