@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from conversores.semanas import hoje_setta, semana_operacional
+from conversores.semanas import hoje_setta, semana_operacional, interpretar_data_setta
 from conversores.cadastro_fallback import recuperar_codigos
 
 COLUNAS_OBRIGATORIAS = [
@@ -103,7 +103,7 @@ def _numero(serie: pd.Series) -> pd.Series:
 
 
 def _data(serie: pd.Series) -> pd.Series:
-    return pd.to_datetime(serie, errors="coerce", dayfirst=True)
+    return serie.map(interpretar_data_setta)
 
 
 def _data_exibicao(valor: Any):
@@ -225,8 +225,8 @@ def _mapa_for001(for001: pd.DataFrame, avisos: list[str]):
     )
 
     base["_OP"] = base.iloc[:, idx_op].map(_normalizar_op)
-    base["_DATA_CLIENTE"] = pd.to_datetime(base.iloc[:, idx_cliente], errors="coerce", dayfirst=True)
-    base["_DT_MRP"] = pd.to_datetime(base.iloc[:, idx_mrp], errors="coerce", dayfirst=True)
+    base["_DATA_CLIENTE"] = base.iloc[:, idx_cliente].map(interpretar_data_setta)
+    base["_DT_MRP"] = base.iloc[:, idx_mrp].map(interpretar_data_setta)
     base["_CONDICAO"] = base.iloc[:, idx_cond].map(_texto).str.upper()
     base = base[base["_OP"] != ""].copy()
 
@@ -279,7 +279,7 @@ def _mapa_for022(for022: pd.DataFrame, avisos: list[str]):
         return None, ["FOR-022: são necessárias pelo menos 22 colunas para acessar A e V."]
     base = for022.copy()
     base["_OP"] = base.iloc[:, 0].map(_normalizar_op)
-    base["_SEPARACAO"] = pd.to_datetime(base.iloc[:, 21], errors="coerce", dayfirst=True)
+    base["_SEPARACAO"] = base.iloc[:, 21].map(interpretar_data_setta)
     base = base[base["_OP"] != ""].copy()
 
     registros = {}
