@@ -25,6 +25,41 @@ def versao_semana_operacional(hoje: date | None = None) -> int:
     return int(inicio_semana_operacional(hoje).strftime("%Y%m%d"))
 
 
+def interpretar_data_setta(valor):
+    """Interpreta datas brasileiras e ISO sem inverter dia/mês.
+
+    Excel/datetime permanecem como datas; ISO AAAA-MM-DD nunca passa por
+    dayfirst=True. Data BR DD/MM/AAAA é reconhecida pelo formato explícito.
+    Não tenta adivinhar formatos desconhecidos.
+    """
+    import re
+    if valor is None:
+        return pd.NaT
+    try:
+        if pd.isna(valor):
+            return pd.NaT
+    except (TypeError, ValueError):
+        return pd.NaT
+    if isinstance(valor, (datetime, date, pd.Timestamp)):
+        return pd.Timestamp(valor)
+    if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+        # Datas numéricas do Excel (somente a faixa de seriais de data).
+        numero = float(valor)
+        if numero.is_integer() and 20000 <= numero <= 80000:
+            return pd.to_datetime(numero, unit="D", origin="1899-12-30", errors="coerce")
+        return pd.NaT
+    texto = str(valor).strip()
+    if not texto or texto.upper() in {"NAN", "NAT", "NONE", "NI", "NA", "N/A"}:
+        return pd.NaT
+    if re.match(r"^\\d{4}-\\d{2}-\\d{2}(?:$|[T\\s])", texto):
+        return pd.to_datetime(texto[:10], format="%Y-%m-%d", errors="coerce")
+    if re.match(r"^\\d{2}/\\d{2}/\\d{4}(?:$|\\s)", texto):
+        return pd.to_datetime(texto[:10], format="%d/%m/%Y", errors="coerce")
+    if re.match(r"^\\d{4}/\\d{2}/\\d{2}(?:$|\\s)", texto):
+        return pd.to_datetime(texto[:10], format="%Y/%m/%d", errors="coerce")
+    return pd.NaT
+
+
 def semana_operacional(valor, hoje=None, sem_data_usa_hoje=False):
     """Devolve ('AAAA-SS', 'dd/mm/aaaa a dd/mm/aaaa').
 
@@ -33,7 +68,7 @@ def semana_operacional(valor, hoje=None, sem_data_usa_hoje=False):
     réveillon pertence ao ano do domingo em que começou.
     """
     hoje = hoje if hoje is not None else hoje_setta()
-    data = pd.to_datetime(valor, errors="coerce", dayfirst=True)
+    data = interpretar_data_setta(valor)
 
     if pd.isna(data):
         if not sem_data_usa_hoje:
