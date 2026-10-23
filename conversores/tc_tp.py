@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from conversores.semanas import hoje_setta, semana_operacional
+from conversores.semanas import hoje_setta, semana_operacional, interpretar_data_setta
 
 
 def _texto(valor):
@@ -35,7 +35,7 @@ def _codigo(valor):
 def _data(valor):
     if pd.isna(valor) or _texto(valor) == "":
         return pd.NaT
-    return pd.to_datetime(valor, errors="coerce", dayfirst=True)
+    return interpretar_data_setta(valor)
 
 
 def _semana(valor, hoje=None):
