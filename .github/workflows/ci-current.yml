@@ -16,6 +16,9 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python
         run: python -m py_compile app.py central_data.py pipeline_sync.py conversores/*.py
+      - name: Impedir inversao de datas BR e ISO em compras e semanas
+        run: PYTHONPATH=. python -m unittest tests/test_datas_iso_br_pc.py
+
       - name: Testar saldo real de estoque e separadores decimais
         run: PYTHONPATH=. python tests/test_estoque_decimal.py
 
