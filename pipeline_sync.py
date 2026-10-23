@@ -114,6 +114,10 @@ def get_state(report_type: str) -> dict:
         # reconstrução da base mesmo com versões iguais do ERP.
         versions["revisao_calculo_estoque"] = 2
     if report_type in {"Relatório Geral", "Compras — S.C + P.C + Pré-nota", "MRP — TC/TP"}:
+        # Correção da interpretação de datas normalizadas ISO AAAA-MM-DD.
+        # Força reconstrução das três bases potencialmente afetadas sem
+        # exigir novo upload da fonte nem alterar documentos brutos.
+        versions["revisao_interpretacao_datas"] = 2
         # Estes relatórios reenquadram datas vencidas na semana atual.
         # Uma nova semana operacional (domingo a sábado) muda a versão
         # lógica e dispara recálculo, mesmo sem nova carga das fontes.
