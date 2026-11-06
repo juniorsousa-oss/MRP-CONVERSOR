@@ -132,11 +132,20 @@ def preparar_endereco(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     df["Endereco"] = df["Endereco"].map(_texto)
     df["Quantidade"] = _numero(df["Quantidade"])
 
+    # ENDEREÇO pode conter milhares de posições históricas com saldo zero.
+    # Elas não representam saldo a contar nem a reservar. Ignorar antes de
+    # agregar, e novamente depois, se um saldo positivo/negativo se anular.
+    validas = (
+        (df["COD_MATERIAL"] != "")
+        & (df["Endereco"] != "")
+        & df["Quantidade"].ne(0)
+    )
     agrupado = (
-        df[(df["COD_MATERIAL"] != "") & (df["Endereco"] != "")]
+        df.loc[validas]
         .groupby(["COD_MATERIAL", "Endereco"], sort=False, as_index=False)["Quantidade"]
         .sum()
     )
+    agrupado = agrupado.loc[agrupado["Quantidade"].ne(0)].reset_index(drop=True)
     return agrupado, erros
 
 
