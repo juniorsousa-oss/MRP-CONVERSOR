@@ -527,19 +527,46 @@ def processar_relatorio_geral(
             "nenhuma foi simplesmente excluída."
         )
 
-    # O novo Relatorio Geral repete a Qtd. necessaria total em cada
-    # linha de lote/separacao. Apenas a primeira linha de cada OP + produto
-    # representa a necessidade, mas as quantidades atendidas continuam
-    # fracionadas por lote e precisam ser somadas normalmente.
-    dispersao_necessidade = df.groupby("COD_MRP", sort=False)["Qtd. necessária"].nunique(dropna=False)
-    necessidade_divergente = dispersao_necessidade[dispersao_necessidade > 1]
+    # Cada OP + produto pode ter VARIAS solicitacoes em datas distintas.
+    # Cada solicitacao repete sua necessidade integral nas linhas de lotes.
+    # Assim: primeiro valor por OP/produto/data -> SOMA das solicitacoes,
+    # enquanto o atendimento continua SOMADO por todas as linhas de lote.
+    chaves_solicitacao = ["COD_MRP", "Última solicitação"]
+    quantidades_por_solicitacao = df.groupby(
+        chaves_solicitacao, sort=False, dropna=False
+    )["Qtd. necessária"]
+    divergencias_por_solicitacao = quantidades_por_solicitacao.nunique(dropna=False)
+    necessidade_divergente = divergencias_por_solicitacao[
+        divergencias_por_solicitacao > 1
+    ]
     if not necessidade_divergente.empty:
+        erros.append(
+            "Relatório Geral: "
+            f"{len(necessidade_divergente)} solicitação(ões) têm necessidades "
+            "diferentes para a mesma OP, produto e data. "
+            "Corrija na origem antes de publicar para evitar subcontagem."
+        )
+        return {
+            "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
+            "inconsistencias": quarentena, "erros": erros, "avisos": avisos,
+            "metricas": {"linhas_brutas": len(bruto), "erros": len(erros)},
+        }
+
+    primeira_por_solicitacao = quantidades_por_solicitacao.first()
+    necessidade_total = primeira_por_solicitacao.groupby(
+        level=0, sort=False
+    ).sum()
+    df["_NECESSIDADE_TOTAL_OP_PRODUTO"] = df["COD_MRP"].map(necessidade_total)
+    quantidade_solicitacoes = primeira_por_solicitacao.groupby(
+        level=0, sort=False
+    ).size()
+    ops_multiplas_solicitacoes = int((quantidade_solicitacoes > 1).sum())
+    if ops_multiplas_solicitacoes:
         avisos.append(
-            "CONFERÊNCIA: "
-            f"{len(necessidade_divergente)} OP-produto possuem quantidades "
-            "necessárias diferentes entre as linhas. Pela regra vigente, "
-            "somente a PRIMEIRA necessidade de cada OP-produto será utilizada. "
-            "Conferir solicitações distintas antes de encerrar a análise."
+            "Relatório Geral: "
+            f"{ops_multiplas_solicitacoes} OP-produto possuem solicitações "
+            "em datas distintas. Cada necessidade foi considerada uma única "
+            "vez por data e somada ao total da OP-produto."
         )
 
     agrupado = (
@@ -550,8 +577,8 @@ def processar_relatorio_geral(
             Descrição=("Descrição", _primeiro_texto),
             **{
                 "Última solicitação": ("Última solicitação", "max"),
-                # 'first' evita duplicar necessidades repetidas por lote.
-                "Qtd. necessária": ("Qtd. necessária", "first"),
+                # Soma de necessidades distintas por data, sem repetir lotes.
+                "Qtd. necessária": ("_NECESSIDADE_TOTAL_OP_PRODUTO", "first"),
                 "Qtd. atendida": ("Qtd. atendida", "sum"),
                 "Resp. separação": ("Resp. separação", _nomes_unicos),
                 "Data de separação": ("Data de separação", "max"),
@@ -564,17 +591,16 @@ def processar_relatorio_geral(
         .reset_index()
     )
 
-    # A soma dos atendimentos pode ultrapassar a primeira necessidade
-    # quando existem solicitacoes distintas para a mesma OP-produto.
-    # Nao publicar demanda negativa para o MRP; manter o total atendido
-    # original e registrar os casos em aviso auditavel.
+    # Em dados consistentes a soma dos atendimentos nao deve exceder
+    # a soma de necessidades distintas por data. Caso ocorra, destacar para
+    # auditoria e nao publicar pendencia negativa no MRP.
     sobre_atendimentos = agrupado["Qtd. atendida"] > agrupado["Qtd. necessária"] + 1e-9
     if sobre_atendimentos.any():
         avisos.append(
             "CONFERÊNCIA DE NECESSIDADE: "
             f"{int(sobre_atendimentos.sum())} OP-produto apresentam atendimento "
-            "superior à primeira quantidade necessária. Pendência limitada "
-            "a zero; conferir as diferentes datas de solicitação na origem."
+            "superior à SOMA das necessidades por data. Pendência limitada "
+            "a zero; conferir a origem antes de aprovar o fechamento."
         )
     agrupado["Pendência"] = (
         agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
@@ -688,6 +714,7 @@ def processar_relatorio_geral(
         "chaves_unicas": int(df["COD_MRP"].nunique()),
         "linhas_agrupadas": len(agrupado),
         "op_produto_necessidade_divergente": int(len(necessidade_divergente)),
+        "op_produto_multiplas_solicitacoes": ops_multiplas_solicitacoes,
         "op_produto_atendimento_acima_necessidade": int(sobre_atendimentos.sum()),
         "erros": len(erros),
         "codigos_provisorios": len(trilha_cadastros),
