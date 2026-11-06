@@ -527,6 +527,21 @@ def processar_relatorio_geral(
             "nenhuma foi simplesmente excluída."
         )
 
+    # O novo Relatorio Geral repete a Qtd. necessaria total em cada
+    # linha de lote/separacao. Apenas a primeira linha de cada OP + produto
+    # representa a necessidade, mas as quantidades atendidas continuam
+    # fracionadas por lote e precisam ser somadas normalmente.
+    dispersao_necessidade = df.groupby("COD_MRP", sort=False)["Qtd. necessária"].nunique(dropna=False)
+    necessidade_divergente = dispersao_necessidade[dispersao_necessidade > 1]
+    if not necessidade_divergente.empty:
+        avisos.append(
+            "CONFERÊNCIA: "
+            f"{len(necessidade_divergente)} OP-produto possuem quantidades "
+            "necessárias diferentes entre as linhas. Pela regra vigente, "
+            "somente a PRIMEIRA necessidade de cada OP-produto será utilizada. "
+            "Conferir solicitações distintas antes de encerrar a análise."
+        )
+
     agrupado = (
         df.groupby("COD_MRP", sort=False, dropna=False)
         .agg(
@@ -535,7 +550,8 @@ def processar_relatorio_geral(
             Descrição=("Descrição", _primeiro_texto),
             **{
                 "Última solicitação": ("Última solicitação", "max"),
-                "Qtd. necessária": ("Qtd. necessária", "sum"),
+                # 'first' evita duplicar necessidades repetidas por lote.
+                "Qtd. necessária": ("Qtd. necessária", "first"),
                 "Qtd. atendida": ("Qtd. atendida", "sum"),
                 "Resp. separação": ("Resp. separação", _nomes_unicos),
                 "Data de separação": ("Data de separação", "max"),
@@ -548,7 +564,21 @@ def processar_relatorio_geral(
         .reset_index()
     )
 
-    agrupado["Pendência"] = agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
+    # A soma dos atendimentos pode ultrapassar a primeira necessidade
+    # quando existem solicitacoes distintas para a mesma OP-produto.
+    # Nao publicar demanda negativa para o MRP; manter o total atendido
+    # original e registrar os casos em aviso auditavel.
+    sobre_atendimentos = agrupado["Qtd. atendida"] > agrupado["Qtd. necessária"] + 1e-9
+    if sobre_atendimentos.any():
+        avisos.append(
+            "CONFERÊNCIA DE NECESSIDADE: "
+            f"{int(sobre_atendimentos.sum())} OP-produto apresentam atendimento "
+            "superior à primeira quantidade necessária. Pendência limitada "
+            "a zero; conferir as diferentes datas de solicitação na origem."
+        )
+    agrupado["Pendência"] = (
+        agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
+    ).clip(lower=0)
     agrupado["_OP"] = agrupado["Projeto"].map(_normalizar_op)
 
     ops_unicas = [op for op in agrupado["_OP"].dropna().unique().tolist() if op]
@@ -657,6 +687,8 @@ def processar_relatorio_geral(
         "linhas_brutas": len(bruto),
         "chaves_unicas": int(df["COD_MRP"].nunique()),
         "linhas_agrupadas": len(agrupado),
+        "op_produto_necessidade_divergente": int(len(necessidade_divergente)),
+        "op_produto_atendimento_acima_necessidade": int(sobre_atendimentos.sum()),
         "erros": len(erros),
         "codigos_provisorios": len(trilha_cadastros),
         "codigos_pendentes": len({item["Linha de origem"] for item in sugestoes_cadastros}),
