@@ -1,0 +1,26 @@
+name: Validar compras por documento
+on:
+  push:
+    branches:
+      - main
+      - fix/compras-individualizar-documentos-20261106
+    paths:
+      - 'conversores/compras.py'
+      - 'tests/test_compras_por_documento.py'
+      - '.github/workflows/compras-por-documento.yml'
+  pull_request:
+    branches: [main]
+jobs:
+  compras-documento:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependências de compras
+        run: python -m pip install "pandas>=2.2,<3"
+      - name: Compilação
+        run: python -m py_compile conversores/compras.py
+      - name: Testes produto + documento e quantidades individuais
+        run: python -m unittest discover -s tests -p 'test_compras_por_documento.py' -v
