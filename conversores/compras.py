@@ -76,21 +76,22 @@ def _formatar_datas(base):
 
 def _agrupar_sc(df):
     dados = df.copy()
+    # Cada produto + S.C. + previsão mantém sua quantidade individual.
     # A = Numero SC, C = Produto, D = Descricao, G = Quantidade,
     # I = Centro Custo, K = Entrega SC, N = Saldo SC.
     dados = dados[dados.iloc[:, 8].map(_texto) == CC_ALVO].copy()
     dados["CÓD"] = dados.iloc[:, 2].map(_codigo)
     dados["DESCRIÇÃO"] = dados.iloc[:, 3].map(_texto)
+    dados["S.C"] = dados.iloc[:, 0].map(_texto)
     dados["DATA DA S.C"] = dados.iloc[:, 10].map(_data)
     dados["SALDO_SC"] = pd.to_numeric(dados.iloc[:, 13], errors="coerce").fillna(0)
     dados = dados[(dados["CÓD"] != "") & (dados["SALDO_SC"] > 0)].copy()
 
     return (
-        dados.groupby(["CÓD", "DATA DA S.C"], dropna=False, as_index=False)
+        dados.groupby(["CÓD", "DATA DA S.C", "S.C"], dropna=False, as_index=False)
         .agg(
             **{
                 "DESCRIÇÃO": ("DESCRIÇÃO", lambda x: next((v for v in x if v), "")),
-                "S.C": (dados.columns[0], _numeros_unicos),
                 "QUANTIDADE S.C": ("SALDO_SC", "sum"),
             }
         )
@@ -99,11 +100,13 @@ def _agrupar_sc(df):
 
 def _agrupar_pc(df):
     dados = df.copy()
+    # Cada produto + P.C. + previsão mantém sua quantidade individual.
     # A = Num.PC, H = Produto, J = Descricao, M = Entrega,
     # N = Quantidade, S = Qtd.Entregue, V = Centro Custo.
     dados = dados[dados.iloc[:, 21].map(_texto) == CC_ALVO].copy()
     dados["CÓD"] = dados.iloc[:, 7].map(_codigo)
     dados["DESCRIÇÃO"] = dados.iloc[:, 9].map(_texto)
+    dados["P.C"] = dados.iloc[:, 0].map(_texto)
     dados["DATA DA P.C"] = dados.iloc[:, 12].map(_data)
     dados["QUANTIDADE"] = pd.to_numeric(dados.iloc[:, 13], errors="coerce").fillna(0)
     dados["QTD_ENTREGUE"] = pd.to_numeric(dados.iloc[:, 18], errors="coerce").fillna(0)
@@ -111,11 +114,10 @@ def _agrupar_pc(df):
     dados = dados[(dados["CÓD"] != "") & (dados["SALDO_PC"] > 0)].copy()
 
     return (
-        dados.groupby(["CÓD", "DATA DA P.C"], dropna=False, as_index=False)
+        dados.groupby(["CÓD", "DATA DA P.C", "P.C"], dropna=False, as_index=False)
         .agg(
             **{
                 "DESCRIÇÃO": ("DESCRIÇÃO", lambda x: next((v for v in x if v), "")),
-                "P.C": (dados.columns[0], _numeros_unicos),
                 "QUANTIDADE P.C": ("SALDO_PC", "sum"),
             }
         )
@@ -142,7 +144,7 @@ def _agrupar_pre_nota(df):
 
 
 def _montar_base_comum(sc, pc, pn):
-    # Cada linha representa uma ocorrência de SC ou PC por produto/data.
+    # Cada linha representa um número individual de S.C. ou P.C. por produto/data.
     # As quantidades de SC e PC nunca são somadas entre si.
     linhas = []
     for _, row in sc.iterrows():
@@ -240,8 +242,8 @@ def processar_compras(sc_bruto, pc_bruto, pre_nota_bruto):
         {"TIPO": "INFO", "MENSAGEM": "S.C: Saldo SC. P.C: Quantidade - Qtd.Entregue. Pré-nota: soma por produto."},
         {"TIPO": "INFO", "MENSAGEM": "Datas anteriores a hoje usam a semana atual sem alterar a data original."},
         {"TIPO": "INFO", "MENSAGEM": "Semana/período/total de atendimento são calculados separadamente para S.C e P.C."},
-        {"TIPO": "INFO", "MENSAGEM": f"S.C após filtro/abertos: {len(sc)} linhas agrupadas."},
-        {"TIPO": "INFO", "MENSAGEM": f"P.C após filtro/saldo positivo: {len(pc)} linhas agrupadas."},
+        {"TIPO": "INFO", "MENSAGEM": f"S.C após filtro/abertos: {len(sc)} produto-documento-previsão."},
+        {"TIPO": "INFO", "MENSAGEM": f"P.C após filtro/saldo positivo: {len(pc)} produto-documento-previsão."},
     ] + [
         {"TIPO": "INCONSISTÊNCIA", "MENSAGEM": x} for x in inconsistencias
     ])
