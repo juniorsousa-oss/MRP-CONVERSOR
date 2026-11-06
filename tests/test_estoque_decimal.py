@@ -48,7 +48,7 @@ def test_revision_forca_recalculo() -> None:
     assert config_for("Saldo em Estoque")["derived_key"] == "estoque_tratado"
     from pathlib import Path
     pipeline = Path("pipeline_sync.py").read_text(encoding="utf-8")
-    assert 'versions["revisao_calculo_estoque"] = 2' in pipeline
+    assert 'versions["revisao_calculo_estoque"] = 3' in pipeline
 
 
 if __name__ == "__main__":
