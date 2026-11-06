@@ -1,4 +1,4 @@
-"""Regressões da revisão 6 do Relatório Geral e revisão 3 de endereços."""
+"""Regressões: necessidade por OP/produto/data e saldo de endereços."""
 import unittest
 
 import pandas as pd
@@ -42,7 +42,7 @@ class TestNecessidadeNaoDuplicada(unittest.TestCase):
         self.assertEqual(row["Pendência"], 0)
         self.assertEqual(resultado["metricas"]["op_produto_necessidade_divergente"], 0)
 
-    def test_primeira_linha_rege_mesmo_quando_a_necessidade_varia(self):
+    def test_datas_diferentes_sao_solicitacoes_adicionais(self):
         primeira = dict(self.base, **{"Qtd. necessária": 2, "Qtd. atendida": 2})
         segunda = dict(self.base, **{
             "Qtd. necessária": 4, "Qtd. atendida": 4,
@@ -50,13 +50,35 @@ class TestNecessidadeNaoDuplicada(unittest.TestCase):
         })
         resultado = self.convert([primeira, segunda])
         row = resultado["tratado"].iloc[0]
-        self.assertEqual(row["Qtd. necessária"], 2)
+        self.assertEqual(row["Qtd. necessária"], 6)
         self.assertEqual(row["Qtd. atendida"], 6)
-        # Demanda negativa não pode chegar ao MRP por causa de lotes.
         self.assertEqual(row["Pendência"], 0)
-        self.assertEqual(resultado["metricas"]["op_produto_necessidade_divergente"], 1)
-        self.assertEqual(resultado["metricas"]["op_produto_atendimento_acima_necessidade"], 1)
-        self.assertTrue(any("CONFERÊNCIA" in a for a in resultado["avisos"]))
+        self.assertEqual(resultado["metricas"]["op_produto_multiplas_solicitacoes"], 1)
+        self.assertEqual(resultado["metricas"]["op_produto_necessidade_divergente"], 0)
+        self.assertEqual(resultado["metricas"]["op_produto_atendimento_acima_necessidade"], 0)
+
+    def test_lotes_mesma_data_e_nova_solicitacao(self):
+        rows = [
+            dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 2}),
+            dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 1}),
+            dict(self.base, **{"Qtd. necessária": 4, "Qtd. atendida": 1,
+                                "Última solicitação": "20/10/2026"}),
+            dict(self.base, **{"Qtd. necessária": 4, "Qtd. atendida": 3,
+                                "Última solicitação": "20/10/2026"}),
+        ]
+        resultado = self.convert(rows)
+        row = resultado["tratado"].iloc[0]
+        self.assertEqual(row["Qtd. necessária"], 7)
+        self.assertEqual(row["Qtd. atendida"], 7)
+        self.assertEqual(row["Pendência"], 0)
+
+    def test_qtd_distinta_na_mesma_data_e_inconsistente(self):
+        primeira = dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 1})
+        segunda = dict(self.base, **{"Qtd. necessária": 5, "Qtd. atendida": 1})
+        resultado = self.convert([primeira, segunda])
+        self.assertTrue(resultado["erros"])
+        self.assertTrue(resultado["tratado"].empty)
+        self.assertTrue(any("mesma OP, produto e data" in msg for msg in resultado["erros"]))
 
     def test_op_distinta_continua_separada(self):
         primeira = dict(self.base)
