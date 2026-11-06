@@ -106,13 +106,13 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Revisão 5: publica somente chaves válidas, com auditoria persistente
-        # das demandas inconsistentes na base derivada separada.
-        versions["revisao_calculo_relatorio_geral"] = 5
+        # Revisão 6: necessidade apenas na primeira linha por OP-produto,
+        # com atendimento fracionado somado e diagnósticos de divergência.
+        versions["revisao_calculo_relatorio_geral"] = 6
     if report_type == "Saldo em Estoque":
-        # Revisão 2 corrige a conversão dos pontos decimais. Obriga a
-        # reconstrução da base mesmo com versões iguais do ERP.
-        versions["revisao_calculo_estoque"] = 2
+        # Revisão 3: além dos decimais, elimina posições ENDEREÇO com
+        # saldo zero da base tratada, preservando o bruto auditável.
+        versions["revisao_calculo_estoque"] = 3
     if report_type in {"Relatório Geral", "Compras — S.C + P.C + Pré-nota", "MRP — TC/TP"}:
         # Correção da interpretação de datas normalizadas ISO AAAA-MM-DD.
         # Força reconstrução das três bases potencialmente afetadas sem
