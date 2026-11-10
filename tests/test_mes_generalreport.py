@@ -7,7 +7,8 @@ import unittest
 import pandas as pd
 
 from conversores.mes_generalreport import (
-    MES_TO_GERAL, adaptar_json_mes, exportar_geral_excel, diagnostico_mes,
+    MES_TO_GERAL, adaptar_json_mes, adaptar_json_mes_com_quarentena,
+    exportar_geral_excel, diagnostico_mes,
 )
 from conversores.relatorio_geral import processar_relatorio_geral
 
@@ -40,6 +41,50 @@ def registro(**updates):
 
 
 class AdaptadorGeneralReportTests(unittest.TestCase):
+    def test_um_sem_codigo_em_201_nao_bloqueia_base_valida(self):
+        rows = [
+            registro(Code="00000441", NecessaryQuantity=1, AttendedQuantity=0)
+            for _ in range(200)
+        ]
+        rows.append(registro(Code=None, Description="BASCULANTE",
+                             NecessaryQuantity=1, AttendedQuantity=0))
+        result = adaptar_json_mes_com_quarentena(rows, linhas_referencia=201)
+        self.assertTrue(result["pode_processar"])
+        self.assertEqual(result["status"], "PROCESSAR_COM_RESSALVAS")
+        self.assertEqual(len(result["tratado"]), 200)
+        self.assertEqual(len(result["inconsistencias"]), 1)
+        self.assertEqual(result["metricas"]["linhas_recebidas"], 201)
+        self.assertEqual(result["inconsistencias"].iloc[0]["Linha JSON"], 201)
+        self.assertEqual(result["inconsistencias"].iloc[0]["Qtd. necessária informada"], 1)
+        self.assertEqual(result["inconsistencias"].iloc[0]["Status"], "PENDENTE DE REGULARIZAÇÃO")
+
+    def test_outro_erro_isolado_e_informado_sem_contaminar_demanda(self):
+        rows = [registro() for _ in range(200)]
+        rows.append(registro(AttendedQuantity="N/A"))
+        result = adaptar_json_mes_com_quarentena(rows)
+        self.assertTrue(result["pode_processar"])
+        self.assertEqual(result["status"], "PROCESSAR_COM_RESSALVAS")
+        self.assertEqual(len(result["tratado"]), 200)
+        self.assertIn("não é numérico", result["inconsistencias"].iloc[0]["Motivo"])
+
+    def test_muitos_erros_protegem_ultima_fonte(self):
+        rows = [registro() for _ in range(10)]
+        rows.extend(registro(Code=None) for _ in range(10))
+        result = adaptar_json_mes_com_quarentena(rows)
+        self.assertFalse(result["pode_processar"])
+        self.assertEqual(result["status"], "PROTEGER_BASE")
+        self.assertEqual(len(result["tratado"]), 10)
+        self.assertEqual(len(result["inconsistencias"]), 10)
+
+    def test_resposta_muito_menor_que_referencia_nao_pode_publicar(self):
+        result = adaptar_json_mes_com_quarentena([registro()], linhas_referencia=100)
+        self.assertFalse(result["pode_processar"])
+        self.assertEqual(result["status"], "PROTEGER_BASE")
+
+    def test_adaptador_estrito_antigo_permanece_compativel(self):
+        with self.assertRaisesRegex(ValueError, "Code"):
+            adaptar_json_mes([registro(Code=None)])
+
     def test_campos_mes_para_geral_preservam_op_codigo_e_qtd(self):
         df = adaptar_json_mes([registro()])
         self.assertEqual(list(df.columns), list(MES_TO_GERAL.values()))
