@@ -248,7 +248,47 @@ def _process(report_type: str, files: dict[str, dict]) -> dict:
         for001 = _source_frame(files["for001"], sheet_name="PAINEL", header=4)
         for022 = _source_frame(files["for022"], sheet_name="Datas esperadas", header=0)
         cadastros = _source_frame(files["cadastros"], header=1)
-        return processar_relatorio_geral(bruto, for001, for022, cadastros=cadastros)
+        resultado = processar_relatorio_geral(bruto, for001, for022, cadastros=cadastros)
+
+        # A API MES isola dados com tipos/campos inválidos em outra aba;
+        # preservar TODOS esses registros no diagnóstico persistente em vez
+        # de ignorá-los ou substituir a coluna Código por chaves fictícias.
+        nomes = _source_sheet_names(files["relatorio_geral"])
+        if "API_INCONSISTENCIAS" in nomes and not resultado.get("erros"):
+            adicionais = _source_frame(
+                files["relatorio_geral"],
+                sheet_name="API_INCONSISTENCIAS",
+                header=0,
+            )
+            if not adicionais.empty:
+                campos = [
+                    "Linha de origem", "Projeto informado", "Código informado",
+                    "Descrição", "Qtd. necessária", "Qtd. atendida",
+                    "Pendência", "Última solicitação", "Motivo", "Status",
+                    "ORIGEM DO CÓDIGO", "DESCRIÇÃO REFERÊNCIA CADASTROS",
+                ]
+                if any(col not in adicionais.columns for col in campos):
+                    raise RuntimeError(
+                        "A aba API_INCONSISTENCIAS possui colunas incompatíveis. "
+                        "Preservada a base derivada anterior."
+                    )
+                adicionais = adicionais.loc[:, campos].copy()
+                for campo in ("Qtd. necessária", "Qtd. atendida", "Pendência"):
+                    adicionais[campo] = pd.to_numeric(adicionais[campo], errors="coerce")
+                # Pendência desconhecida permanece NaN e NÃO é estimada
+                # como zero, para evitar ocultar necessidade sem cálculo.
+                adicionais["Status"] = "PENDENTE DE REGULARIZAÇÃO"
+                atuais = resultado.get("inconsistencias")
+                if not isinstance(atuais, pd.DataFrame):
+                    raise RuntimeError("Conversor não retornou a quarentena esperada.")
+                resultado["inconsistencias"] = pd.concat(
+                    [atuais, adicionais], ignore_index=True,
+                )
+                resultado.setdefault("avisos", []).append(
+                    f"API MES: {len(adicionais)} registro(s) isolado(s) para "
+                    "correção, sem impedir o processamento dos materiais válidos."
+                )
+        return resultado
 
     if report_type == "Saldo em Estoque":
         analitico = _source_frame(files["analitico"], header=1)
@@ -336,10 +376,13 @@ def sync_pipeline(report_type: str, force: bool = False) -> dict:
         has_warnings = not quarantined.empty
         warning_message = ""
         if has_warnings:
-            pending_total = float(quarantined["Pendência"].sum())
+            pending_values = pd.to_numeric(quarantined["Pendência"], errors="coerce")
+            pending_total = float(pending_values.sum())
+            pending_unknown = int(pending_values.isna().sum())
             warning_message = (
                 f"CONCLUÍDO COM RESSALVAS: {len(quarantined)} registro(s) "
-                f"em quarentena com {pending_total:g} unidade(s) pendente(s); "
+                f"em quarentena com {pending_total:g} unidade(s) pendente(s) calculáveis "
+                f"e {pending_unknown} sem quantidade calculável; "
                 "base principal publicada apenas com materiais válidos. "
                 "Consulte INCONSISTÊNCIAS DO RELATÓRIO GERAL."
             )
