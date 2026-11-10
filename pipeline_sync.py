@@ -242,13 +242,71 @@ def _select_pc_sheet(source: dict) -> str:
     return chosen
 
 
+def _incorporar_quarentena_mes(result: dict, source: dict) -> dict:
+    """Incorpora a aba opcional de erros MES à quarentena persistente MRP.
+
+    O arquivo Geral contém SOMENTE registros aprovados na ingestão.
+    Não recuperamos códigos automaticamente para os itens rejeitados.
+    O relatório Excel manual legado (sem aba adicional) não muda.
+    """
+    abas = _source_sheet_names(source)
+    sheet = next((x for x in abas if x.casefold() == "inconsistencias mes"), None)
+    if sheet is None:
+        return result
+    raw = _source_frame(source, sheet_name=sheet)
+    required = {
+        "Linha JSON", "Projeto informado", "Código informado", "Descrição",
+        "Qtd. necessária informada", "Qtd. atendida informada",
+        "Motivo", "Status",
+    }
+    if not required.issubset(set(raw.columns)):
+        raise ValueError("Aba Inconsistencias MES incompleta; fonte não será publicada.")
+    if raw.empty:
+        return result
+    original = result.get("inconsistencias")
+    if not isinstance(original, pd.DataFrame):
+        raise ValueError("Relatório Geral sem estrutura de inconsistências.")
+
+    # Conservar as informações originais, sem atribuir identificador fictício.
+    sidecar = pd.DataFrame({
+        "Linha de origem": raw["Linha JSON"],
+        "Projeto informado": raw["Projeto informado"],
+        "Código informado": raw["Código informado"],
+        "Descrição": raw["Descrição"],
+        "Qtd. necessária": raw["Qtd. necessária informada"],
+        "Qtd. atendida": raw["Qtd. atendida informada"],
+        "Última solicitação": "",
+        "Motivo": raw["Motivo"],
+        "Status": "PENDENTE DE REGULARIZAÇÃO",
+        "ORIGEM DO CÓDIGO": "MES (API · QUARENTENA)",
+        "DESCRIÇÃO REFERÊNCIA CADASTROS": "",
+    })
+    necessidade = pd.to_numeric(sidecar["Qtd. necessária"], errors="coerce")
+    atendida = pd.to_numeric(sidecar["Qtd. atendida"], errors="coerce")
+    sidecar["Pendência"] = (necessidade - atendida).where(
+        necessidade.notna() & atendida.notna()
+    )
+    # A publicação da quarentena antecede a base principal no pipeline atual.
+    result = dict(result)
+    result["inconsistencias"] = pd.concat(
+        [original, sidecar.reindex(columns=original.columns)],
+        ignore_index=True,
+    )
+    result.setdefault("avisos", []).append(
+        f"MES API: {len(sidecar)} registro(s) isolado(s) para correção; "
+        "os materiais válidos continuam sendo processados."
+    )
+    return result
+
+
 def _process(report_type: str, files: dict[str, dict]) -> dict:
     if report_type == "Relatório Geral":
         bruto = _source_frame(files["relatorio_geral"], sheet_name="Geral")
         for001 = _source_frame(files["for001"], sheet_name="PAINEL", header=4)
         for022 = _source_frame(files["for022"], sheet_name="Datas esperadas", header=0)
         cadastros = _source_frame(files["cadastros"], header=1)
-        return processar_relatorio_geral(bruto, for001, for022, cadastros=cadastros)
+        resultado = processar_relatorio_geral(bruto, for001, for022, cadastros=cadastros)
+        return _incorporar_quarentena_mes(resultado, files["relatorio_geral"])
 
     if report_type == "Saldo em Estoque":
         analitico = _source_frame(files["analitico"], header=1)

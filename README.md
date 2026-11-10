@@ -58,3 +58,30 @@ atual de Relatório Geral já separa materiais sem chave e publica base
 `relatorio_geral_inconsistencias`; a ingestão automática da API ainda
 precisa ser vinculada à Central de Dados e executar essa publicação
 antes de substituir o arquivo manual.
+
+## MES API · exceções isoladas durante o reprocessamento
+
+Quando a fonte `relatorio_geral` for publicada pela API MES, a aba
+`Geral` conterá **somente materiais válidos** e a aba
+`Inconsistencias MES` registrará todos os itens rejeitados (inclusive
+BASCULANTE com código ausente). O pipeline de Relatório Geral agora
+importa a aba adicional para a base derivada
+`relatorio_geral_inconsistencias`, **sem permitir a recuperação
+automática de códigos desses registros por coincidência de descrição**.
+
+Assim o fluxo segue:
+
+1. MES valida 100% das linhas; isola exceções com motivo.
+2. O Monitor publica apenas após pré-validar o Excel gerado.
+3. O worker existente percebe nova versão e processa `Geral` com
+   FOR001, FOR022 e CADASTROS.
+4. O Conversor agrega `Inconsistencias MES` à quarentena derivada,
+   preservando a quantidade informada e deixando `Pendência` sem valor
+   quando a quantidade é inválida.
+5. Dados válidos são publicados mesmo existindo erros individuais.
+   Falhas de esquema generalizadas interrompem a publicação.
+
+A automação da coleta fica no repositório MONITOR-APIs às 07h20
+(Brasília) e exige credencial MES no GitHub Actions. O reprocessamento
+do Conversor continua pelo worker já agendado de cinco em cinco minutos
+(sujeito a atraso de execução no GitHub).

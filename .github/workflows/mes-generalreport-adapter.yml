@@ -1,9 +1,11 @@
 name: Validar adaptador MES GeneralReport
 on:
   push:
-    branches: [main, feat/mes-generalreport-adapter-20261109, feat/mes-adaptador-com-quarentena-20261110]
+    branches: [main, feat/mes-generalreport-adapter-20261109, feat/mes-adaptador-com-quarentena-20261110, feat/mes-sidecar-quarantine-20261110]
     paths:
       - 'conversores/mes_generalreport.py'
+      - 'pipeline_sync.py'
+      - 'tests/test_mes_sidecar_quarantine.py'
       - 'tests/test_mes_generalreport.py'
       - '.github/workflows/mes-generalreport-adapter.yml'
   pull_request:
@@ -17,8 +19,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Dependências
-        run: python -m pip install "pandas>=2.2,<3" "openpyxl>=3.1,<4"
+        run: python -m pip install -r requirements.txt
       - name: Compilar adaptador e conversor
-        run: python -m py_compile conversores/mes_generalreport.py conversores/relatorio_geral.py
+        run: python -m py_compile conversores/mes_generalreport.py conversores/relatorio_geral.py pipeline_sync.py
       - name: Testar mapeamento e regras de demanda
-        run: python -m unittest discover -s tests -p 'test_mes_generalreport.py' -v
+        run: |
+          python -m unittest discover -s tests -p 'test_mes_generalreport.py' -v
+          python -m unittest discover -s tests -p 'test_mes_sidecar_quarantine.py' -v
