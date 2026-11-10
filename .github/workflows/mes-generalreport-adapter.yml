@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Dependências
-        run: python -m pip install "pandas>=2.2,<3" "openpyxl>=3.1,<4"
+        run: python -m pip install -r requirements.txt
       - name: Compilar adaptador e conversor
         run: python -m py_compile conversores/mes_generalreport.py conversores/relatorio_geral.py pipeline_sync.py
       - name: Testar mapeamento e regras de demanda
