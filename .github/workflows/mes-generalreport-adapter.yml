@@ -1,7 +1,7 @@
 name: Validar adaptador MES GeneralReport
 on:
   push:
-    branches: [main, feat/mes-generalreport-adapter-20261109]
+    branches: [main, feat/mes-generalreport-adapter-20261109, feat/mes-adaptador-com-quarentena-20261110]
     paths:
       - 'conversores/mes_generalreport.py'
       - 'tests/test_mes_generalreport.py'
