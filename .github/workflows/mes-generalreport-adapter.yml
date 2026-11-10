@@ -1,7 +1,7 @@
 name: Validar adaptador MES GeneralReport
 on:
   push:
-    branches: [main, feat/mes-generalreport-adapter-20261109, feat/mes-adaptador-com-quarentena-20261110, feat/mes-sidecar-quarantine-20261110]
+    branches: [main, feat/mes-generalreport-adapter-20261109, feat/mes-adaptador-com-quarentena-20261110, feat/mes-sidecar-quarantine-20261110, fix/mes-sidecar-empty-quarantine-20261110]
     paths:
       - 'conversores/mes_generalreport.py'
       - 'pipeline_sync.py'
