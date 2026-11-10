@@ -50,6 +50,20 @@ class QuarentenaMesPipelineTests(unittest.TestCase):
         self.assertEqual(row["Status"], "PENDENTE DE REGULARIZAÇÃO")
         self.assertIn("MES", row["ORIGEM DO CÓDIGO"])
 
+    def test_quarentena_vazia_com_colunas_brutas_preserva_sidecar(self):
+        res = self.exemplo_resultado()
+        res["inconsistencias"] = pd.DataFrame(columns=[
+            "Projeto", "Código", "_LINHA_FONTE", "_CODIGO_FONTE"
+        ])
+        with patch.object(p, "_source_sheet_names",
+                          return_value=["Geral", "Inconsistencias MES"]), \
+             patch.object(p, "_source_frame", return_value=self.mes_sidecar()):
+            novo = p._incorporar_quarentena_mes(res, {"pack": {}})
+        row = novo["inconsistencias"].iloc[0]
+        self.assertEqual(row["Descrição"], "BASCULANTE")
+        self.assertEqual(row["Pendência"], 1)
+        self.assertEqual(row["Linha de origem"], 27322)
+
     def test_excel_legado_sem_sidecar_nao_muda(self):
         result = self.exemplo_resultado()
         with patch.object(p, "_source_sheet_names", return_value=["Geral"]):
