@@ -289,8 +289,9 @@ def _incorporar_quarentena_mes(result: dict, source: dict) -> dict:
     # A publicação da quarentena antecede a base principal no pipeline atual.
     result = dict(result)
     result["inconsistencias"] = pd.concat(
-        [original, sidecar.reindex(columns=original.columns)],
+        [original, sidecar],
         ignore_index=True,
+        sort=False,
     )
     result.setdefault("avisos", []).append(
         f"MES API: {len(sidecar)} registro(s) isolado(s) para correção; "
