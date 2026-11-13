@@ -527,46 +527,112 @@ def processar_relatorio_geral(
             "nenhuma foi simplesmente excluída."
         )
 
-    # Cada OP + produto pode ter VARIAS solicitacoes em datas distintas.
-    # Cada solicitacao repete sua necessidade integral nas linhas de lotes.
-    # Assim: primeiro valor por OP/produto/data -> SOMA das solicitacoes,
-    # enquanto o atendimento continua SOMADO por todas as linhas de lote.
+    # Revisao 8 (Relatorio Geral 13/11/2026):
+    #   * No layout novo a quantidade NECESSARIA aparece apenas na linha
+    #     que cria a necessidade; linhas seguintes/lotes podem trazer zero.
+    #   * A coluna Qtd. pendencias e um saldo EVOLUTIVO, nao um movimento.
+    #     Selecionar a ULTIMA LINHA FISICA de cada OP + codigo + data.
+    #   * Solicitações de datas diferentes somam seus saldos finais.
+    #   * Arquivos legados sem Qtd. pendencias, nos quais cada lote repete
+    #     exatamente a mesma necessidade positiva, permanecem compativeis.
     chaves_solicitacao = ["COD_MRP", "Última solicitação"]
-    quantidades_por_solicitacao = df.groupby(
-        chaves_solicitacao, sort=False, dropna=False
-    )["Qtd. necessária"]
-    divergencias_por_solicitacao = quantidades_por_solicitacao.nunique(dropna=False)
-    necessidade_divergente = divergencias_por_solicitacao[
-        divergencias_por_solicitacao > 1
-    ]
-    if not necessidade_divergente.empty:
-        erros.append(
-            "Relatório Geral: "
-            f"{len(necessidade_divergente)} solicitação(ões) têm necessidades "
-            "diferentes para a mesma OP, produto e data. "
-            "Corrija na origem antes de publicar para evitar subcontagem."
+    grupo_solicitacao = df.groupby(chaves_solicitacao, sort=False, dropna=False)
+    tem_pendencia_origem = "Qtd. pendências" in df.columns
+    if tem_pendencia_origem:
+        texto_pendencia = df["Qtd. pendências"].map(_texto)
+        valores_pendencia = pd.to_numeric(df["Qtd. pendências"], errors="coerce")
+        if texto_pendencia.eq("").any() or valores_pendencia.isna().any() or (
+            valores_pendencia < 0
+        ).any():
+            linhas = df.loc[
+                texto_pendencia.eq("") | valores_pendencia.isna() | (valores_pendencia < 0),
+                "_LINHA_FONTE",
+            ].head(10).tolist()
+            erros.append(
+                "Relatório Geral: Qtd. pendências ausente, inválida ou negativa "
+                f"nas linhas {linhas}. Fonte não publicada."
+            )
+            return {
+                "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
+                "inconsistencias": quarentena, "erros": erros, "avisos": avisos,
+                "metricas": {"linhas_brutas": len(bruto), "erros": len(erros)},
+            }
+        df["Qtd. pendências"] = valores_pendencia
+        # O groupby.tail(1) usa a ordem ORIGINAL da fonte. NUNCA ordenar por
+        # data de conferencia/separacao, que podem ter outra cronologia.
+        necessidade_por_solicitacao = grupo_solicitacao["Qtd. necessária"].sum()
+        atendimento_por_solicitacao = grupo_solicitacao["Qtd. atendida"].sum()
+        pendencia_final_por_solicitacao = (
+            df.groupby(chaves_solicitacao, sort=False, dropna=False)
+            .tail(1).set_index(chaves_solicitacao)["Qtd. pendências"]
         )
-        return {
-            "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
-            "inconsistencias": quarentena, "erros": erros, "avisos": avisos,
-            "metricas": {"linhas_brutas": len(bruto), "erros": len(erros)},
-        }
+        esperado = (
+            necessidade_por_solicitacao - atendimento_por_solicitacao
+        ).clip(lower=0)
+        delta = (
+            pendencia_final_por_solicitacao.reindex(esperado.index) - esperado
+        ).abs()
+        divergencias_pendencia = int((delta > 0.000001).sum())
+        if divergencias_pendencia:
+            erros.append(
+                "Relatório Geral: "
+                f"{divergencias_pendencia} solicitação(ões) com última pendência "
+                "diferente de max(soma necessária - soma atendida, 0). "
+                "Conferir OP + código + data na origem; fonte não publicada."
+            )
+            return {
+                "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
+                "inconsistencias": quarentena, "erros": erros, "avisos": avisos,
+                "metricas": {"linhas_brutas": len(bruto), "erros": len(erros)},
+            }
+        necessidade_divergente = pd.Series(dtype="int64")
+        avisos.append(
+            "Relatório Geral 13/11: necessidades SOMADAS e última Qtd. pendências "
+            "por OP + produto + data validadas; pendências intermediárias não somadas."
+        )
+    else:
+        # Compatibilidade para relatórios/API sem a coluna K:
+        # valores positivos identicos em varias linhas representam a
+        # necessidade repetida por lote no layout antigo. Se há linhas
+        # de necessidade zero, a necessidade e registrada por movimentos.
+        def necessidade_legada(values):
+            positivos = values[values > 0]
+            if len(positivos) > 1 and positivos.nunique() == 1 and not (values == 0).any():
+                return float(positivos.iloc[0])
+            return float(values.sum())
 
-    primeira_por_solicitacao = quantidades_por_solicitacao.first()
-    necessidade_total = primeira_por_solicitacao.groupby(
-        level=0, sort=False
-    ).sum()
+        necessidade_por_solicitacao = (
+            grupo_solicitacao["Qtd. necessária"].apply(necessidade_legada)
+        )
+        atendimento_por_solicitacao = grupo_solicitacao["Qtd. atendida"].sum()
+        pendencia_final_por_solicitacao = (
+            necessidade_por_solicitacao - atendimento_por_solicitacao
+        ).clip(lower=0)
+        necessidade_divergente = pd.Series(dtype="int64")
+        novos_lotes = int(
+            grupo_solicitacao["Qtd. necessária"]
+            .apply(lambda x: len(x) > 1 and bool((x == 0).any()) and bool((x > 0).any()))
+            .sum()
+        )
+        if novos_lotes:
+            avisos.append(
+                f"Relatório Geral sem coluna K: {novos_lotes} solicitação(ões) "
+                "com necessidade positiva + linhas de lote com zero; "
+                "necessidade somada e pendência calculada por diferença."
+            )
+
+    necessidade_total = necessidade_por_solicitacao.groupby(level=0, sort=False).sum()
+    pendencia_total = pendencia_final_por_solicitacao.groupby(level=0, sort=False).sum()
     df["_NECESSIDADE_TOTAL_OP_PRODUTO"] = df["COD_MRP"].map(necessidade_total)
-    quantidade_solicitacoes = primeira_por_solicitacao.groupby(
-        level=0, sort=False
-    ).size()
+    df["_PENDENCIA_TOTAL_OP_PRODUTO"] = df["COD_MRP"].map(pendencia_total)
+    quantidade_solicitacoes = necessidade_por_solicitacao.groupby(level=0, sort=False).size()
     ops_multiplas_solicitacoes = int((quantidade_solicitacoes > 1).sum())
     if ops_multiplas_solicitacoes:
         avisos.append(
             "Relatório Geral: "
             f"{ops_multiplas_solicitacoes} OP-produto possuem solicitações "
-            "em datas distintas. Cada necessidade foi considerada uma única "
-            "vez por data e somada ao total da OP-produto."
+            "em datas distintas; necessidades e últimas pendências "
+            "foram somadas sem compensação entre solicitações."
         )
 
     agrupado = (
@@ -577,8 +643,9 @@ def processar_relatorio_geral(
             Descrição=("Descrição", _primeiro_texto),
             **{
                 "Última solicitação": ("Última solicitação", "max"),
-                # Soma de necessidades distintas por data, sem repetir lotes.
+                # Uma necessidade por solicitacao; sem duplicar atendimentos.
                 "Qtd. necessária": ("_NECESSIDADE_TOTAL_OP_PRODUTO", "first"),
+                "_PENDENCIA_FINAL": ("_PENDENCIA_TOTAL_OP_PRODUTO", "first"),
                 "Qtd. atendida": ("Qtd. atendida", "sum"),
                 "Resp. separação": ("Resp. separação", _nomes_unicos),
                 "Data de separação": ("Data de separação", "max"),
@@ -591,9 +658,8 @@ def processar_relatorio_geral(
         .reset_index()
     )
 
-    # Em dados consistentes a soma dos atendimentos nao deve exceder
-    # a soma de necessidades distintas por data. Caso ocorra, destacar para
-    # auditoria e nao publicar pendencia negativa no MRP.
+    # Sobre-atendimento e sinalizado para auditoria. A pendencia final
+    # e computada por solicitacao, sem permitir saldos negativos.
     sobre_atendimentos = agrupado["Qtd. atendida"] > agrupado["Qtd. necessária"] + 1e-9
     if sobre_atendimentos.any():
         avisos.append(
@@ -602,9 +668,10 @@ def processar_relatorio_geral(
             "superior à SOMA das necessidades por data. Pendência limitada "
             "a zero; conferir a origem antes de aprovar o fechamento."
         )
-    agrupado["Pendência"] = (
-        agrupado["Qtd. necessária"] - agrupado["Qtd. atendida"]
-    ).clip(lower=0)
+    # Pendência é o último saldo de cada solicitação, somado por OP+produto;
+    # não é a soma das pendências intermediárias nem uma compensação
+    # indiscriminada entre solicitações de datas diferentes.
+    agrupado["Pendência"] = agrupado.pop("_PENDENCIA_FINAL")
     agrupado["_OP"] = agrupado["Projeto"].map(_normalizar_op)
 
     ops_unicas = [op for op in agrupado["_OP"].dropna().unique().tolist() if op]
