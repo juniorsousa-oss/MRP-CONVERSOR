@@ -80,6 +80,88 @@ class TestNecessidadeNaoDuplicada(unittest.TestCase):
         self.assertTrue(resultado["tratado"].empty)
         self.assertTrue(any("mesma OP, produto e data" in msg for msg in resultado["erros"]))
 
+    def test_layout_1311_necessidade_somada_ultima_pendencia(self):
+        primeira = dict(self.base, **{
+            "Qtd. necessária": 3, "Qtd. atendida": 2,
+            "Qtd. pendências": 1, "Lote": "062088",
+            "Data de conferência": "23/09/2026",
+        })
+        segunda = dict(self.base, **{
+            "Qtd. necessária": 0, "Qtd. atendida": 1,
+            "Qtd. pendências": 0, "Lote": "062136",
+            # A ordem de conferência não pode mudar a ultima linha da origem.
+            "Data de conferência": "22/09/2026",
+        })
+        result = self.convert([primeira, segunda])
+        self.assertEqual(result["erros"], [])
+        linha = result["tratado"].iloc[0]
+        self.assertEqual(linha["Qtd. necessária"], 3)
+        self.assertEqual(linha["Qtd. atendida"], 3)
+        self.assertEqual(linha["Pendência"], 0)
+        self.assertEqual(result["metricas"]["op_produto_necessidade_divergente"], 0)
+
+    def test_ultima_pendencia_parcial_e_nao_soma_intermediarias(self):
+        linhas = [
+            dict(self.base, **{
+                "Qtd. necessária": 29, "Qtd. atendida": 3,
+                "Qtd. pendências": 26, "Lote": "062088",
+            }),
+            dict(self.base, **{
+                "Qtd. necessária": 0, "Qtd. atendida": 4,
+                "Qtd. pendências": 22, "Lote": "062136",
+            }),
+        ]
+        result = self.convert(linhas)
+        self.assertEqual(result["erros"], [])
+        linha = result["tratado"].iloc[0]
+        self.assertEqual(linha["Qtd. necessária"], 29)
+        self.assertEqual(linha["Qtd. atendida"], 7)
+        self.assertEqual(linha["Pendência"], 22)
+
+    def test_datas_distintas_somam_ultimas_pendencias_individuais(self):
+        linhas = [
+            dict(self.base, **{
+                "Qtd. necessária": 7, "Qtd. atendida": 0,
+                "Qtd. pendências": 7,
+            }),
+            dict(self.base, **{
+                "Qtd. necessária": 1, "Qtd. atendida": 0,
+                "Qtd. pendências": 1, "Última solicitação": "13/11/2026",
+            }),
+        ]
+        result = self.convert(linhas)
+        self.assertEqual(result["erros"], [])
+        linha = result["tratado"].iloc[0]
+        self.assertEqual(linha["Qtd. necessária"], 8)
+        self.assertEqual(linha["Qtd. atendida"], 0)
+        self.assertEqual(linha["Pendência"], 8)
+
+    def test_pendencia_fonte_divergente_bloqueia_publicacao(self):
+        linhas = [
+            dict(self.base, **{
+                "Qtd. necessária": 3, "Qtd. atendida": 2,
+                "Qtd. pendências": 1,
+            }),
+            dict(self.base, **{
+                "Qtd. necessária": 0, "Qtd. atendida": 1,
+                "Qtd. pendências": 1,
+            }),
+        ]
+        result = self.convert(linhas)
+        self.assertTrue(result["tratado"].empty)
+        self.assertTrue(any("última pendência" in msg for msg in result["erros"]))
+
+    def test_api_sem_k_aceita_lotes_adicionais_com_zero(self):
+        linhas = [
+            dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 2}),
+            dict(self.base, **{"Qtd. necessária": 0, "Qtd. atendida": 1}),
+        ]
+        result = self.convert(linhas)
+        self.assertEqual(result["erros"], [])
+        linha = result["tratado"].iloc[0]
+        self.assertEqual(linha["Qtd. necessária"], 3)
+        self.assertEqual(linha["Pendência"], 0)
+
     def test_op_distinta_continua_separada(self):
         primeira = dict(self.base)
         segunda = dict(self.base, Projeto="26031401002")
