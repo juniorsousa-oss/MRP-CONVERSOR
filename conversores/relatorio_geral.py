@@ -595,6 +595,23 @@ def processar_relatorio_geral(
         # valores positivos identicos em varias linhas representam a
         # necessidade repetida por lote no layout antigo. Se há linhas
         # de necessidade zero, a necessidade e registrada por movimentos.
+        ambiguas = grupo_solicitacao["Qtd. necessária"].apply(
+            lambda x: len(x) > 1 and not bool((x == 0).any())
+            and len(x[x > 0]) > 1 and x[x > 0].nunique() > 1
+        )
+        if bool(ambiguas.any()):
+            erros.append(
+                "Relatório Geral: "
+                f"{int(ambiguas.sum())} solicitação(ões) têm necessidades diferentes "
+                "para a mesma OP, produto e data, sem coluna Qtd. pendências "
+                "para validar a nova regra. Fonte não publicada."
+            )
+            return {
+                "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
+                "inconsistencias": quarentena, "erros": erros, "avisos": avisos,
+                "metricas": {"linhas_brutas": len(bruto), "erros": len(erros)},
+            }
+
         def necessidade_legada(values):
             positivos = values[values > 0]
             if len(positivos) > 1 and positivos.nunique() == 1 and not (values == 0).any():
