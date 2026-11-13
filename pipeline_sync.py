@@ -106,9 +106,10 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Revisão 7: uma necessidade por OP/produto/data de solicitação;
-        # somar solicitações distintas, sem repetir lotes atendidos.
-        versions["revisao_calculo_relatorio_geral"] = 7
+        # Revisão 8: necessidade SOMADA, última pendência por
+        # OP + produto + data, com compatibilidade para fonte legada.
+        # Força reconstrução do tratado sem exigir novo upload.
+        versions["revisao_calculo_relatorio_geral"] = 8
     if report_type == "Saldo em Estoque":
         # Revisão 3: além dos decimais, elimina posições ENDEREÇO com
         # saldo zero da base tratada, preservando o bruto auditável.
