@@ -151,6 +151,16 @@ class TestNecessidadeNaoDuplicada(unittest.TestCase):
         self.assertTrue(result["tratado"].empty)
         self.assertTrue(any("última pendência" in msg for msg in result["erros"]))
 
+    def test_api_sem_k_bloqueia_duas_necessidades_positivas_ambiguas(self):
+        linhas = [
+            dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 1}),
+            dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 1}),
+            dict(self.base, **{"Qtd. necessária": 0, "Qtd. atendida": 1}),
+        ]
+        result = self.convert(linhas)
+        self.assertTrue(result["tratado"].empty)
+        self.assertTrue(any("sem coluna Qtd. pendências" in msg for msg in result["erros"]))
+
     def test_api_sem_k_aceita_lotes_adicionais_com_zero(self):
         linhas = [
             dict(self.base, **{"Qtd. necessária": 3, "Qtd. atendida": 2}),
