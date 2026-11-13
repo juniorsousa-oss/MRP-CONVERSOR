@@ -596,15 +596,15 @@ def processar_relatorio_geral(
         # necessidade repetida por lote no layout antigo. Se há linhas
         # de necessidade zero, a necessidade e registrada por movimentos.
         ambiguas = grupo_solicitacao["Qtd. necessária"].apply(
-            lambda x: len(x) > 1 and not bool((x == 0).any())
-            and len(x[x > 0]) > 1 and x[x > 0].nunique() > 1
+            lambda x: len(x) > 1 and len(x[x > 0]) > 1
+            and (bool((x == 0).any()) or x[x > 0].nunique() > 1)
         )
         if bool(ambiguas.any()):
             erros.append(
                 "Relatório Geral: "
                 f"{int(ambiguas.sum())} solicitação(ões) têm necessidades diferentes "
                 "para a mesma OP, produto e data, sem coluna Qtd. pendências "
-                "para validar a nova regra. Fonte não publicada."
+                "para identificar se há repetição de necessidade. Fonte não publicada."
             )
             return {
                 "tratado": pd.DataFrame(), "validacao": pd.DataFrame(),
