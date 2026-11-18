@@ -106,10 +106,9 @@ def get_state(report_type: str) -> dict:
     )
     versions = central.source_versions(source_status, cfg["sources"])
     if report_type == "Relatório Geral":
-        # Revisão 9: necessidade, atendimento e pendência por LINHA/LOTE
-        # (contrato MES de 16/11). Mantém compatibilidade com K cumulativa
-        # do relatório anterior, após validação de cada solicitação.
-        versions["revisao_calculo_relatorio_geral"] = 9
+        # Revisão 10: preserva Valor mínimo encontrado do MES por produto/OP,
+        # mantendo cálculo de necessidade, atendimento e pendência da v9.
+        versions["revisao_calculo_relatorio_geral"] = 10
     if report_type == "Saldo em Estoque":
         # Revisão 3: além dos decimais, elimina posições ENDEREÇO com
         # saldo zero da base tratada, preservando o bruto auditável.
