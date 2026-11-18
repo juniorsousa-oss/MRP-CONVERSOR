@@ -45,6 +45,9 @@ COLUNAS_SAIDA = [
     "VINCULAÇÃO DA DATA",
     "ORIGEM DO CÓDIGO",
     "DESCRIÇÃO REFERÊNCIA CADASTROS",
+    # Campo comercial opcional de origem MES — sempre ao final para não
+    # deslocar as colunas históricas do MRP.
+    "Valor mínimo encontrado",
 ]
 
 
@@ -472,6 +475,30 @@ def processar_relatorio_geral(
     df["Data de conferência"] = _data(df["Data de conferência"])
     df["Qtd. necessária"] = _numero(df["Qtd. necessária"])
     df["Qtd. atendida"] = _numero(df["Qtd. atendida"])
+    # Preço é um atributo opcional, não parte do cálculo das pendências.
+    # O MES pode não entregar o campo; zero = sem cotação identificada.
+    # Mantemos o preço apenas se a origem fornecer um valor não negativo.
+    if "Valor mínimo encontrado" not in df.columns:
+        df["Valor mínimo encontrado"] = 0.0
+        avisos.append(
+            "Relatório Geral: origem sem Valor mínimo encontrado; "
+            "vunit do Protheus continuará vazio até haver cotação na fonte."
+        )
+    else:
+        texto_preco = df["Valor mínimo encontrado"].fillna("").astype(str).str.strip()
+        tem_virgula_e_ponto = texto_preco.str.contains(",", regex=False) & texto_preco.str.contains(".", regex=False)
+        texto_preco.loc[tem_virgula_e_ponto] = (
+            texto_preco.loc[tem_virgula_e_ponto].str.replace(".", "", regex=False)
+        )
+        texto_preco = texto_preco.str.replace(",", ".", regex=False)
+        preços = pd.to_numeric(texto_preco, errors="coerce")
+        invalidos = (texto_preco.ne("") & preços.isna()) | preços.lt(0)
+        if invalidos.any():
+            avisos.append(
+                f"Relatório Geral: {int(invalidos.sum())} valor(es) mínimos "
+                "inválidos na origem; ignorados, sem alterar necessidades."
+            )
+        df["Valor mínimo encontrado"] = preços.where(~invalidos, 0).fillna(0)
 
     linhas_invalidas = df["_MOTIVO_INCONSISTENCIA"].ne("")
     quarentena = df.loc[linhas_invalidas].copy()
@@ -677,6 +704,12 @@ def processar_relatorio_geral(
                 "Qtd. necessária": ("_NECESSIDADE_TOTAL_OP_PRODUTO", "first"),
                 "_PENDENCIA_FINAL": ("_PENDENCIA_TOTAL_OP_PRODUTO", "first"),
                 "Qtd. atendida": ("Qtd. atendida", "sum"),
+                # O preço é por unidade do material. Lotes/OPs sem preço
+                # (zero) não anulam um preço positivo informado.
+                "Valor mínimo encontrado": (
+                    "Valor mínimo encontrado",
+                    lambda v: float(v[v > 0].min()) if (v > 0).any() else 0.0,
+                ),
                 "Resp. separação": ("Resp. separação", _nomes_unicos),
                 "Data de separação": ("Data de separação", "max"),
                 "Resp. conferência": ("Resp. conferência", _nomes_unicos),
