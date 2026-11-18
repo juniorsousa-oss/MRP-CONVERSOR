@@ -59,17 +59,40 @@ def _localizar_coluna(df, aliases, fallback_idx=None):
     )
 
 
-def _status_em_producao(valor):
-    """PMP em produção: PROGRAMADO e ATRASADO; status já executados ficam fora."""
-    status = _normalizar_texto(valor)
-    return status.startswith("PROGRAMAD") or status.startswith("ATRASAD")
+_STATUS_NAO_APROVADOS = re.compile(
+    r"\b(?:REPROVAD\w*|REJEITAD\w*|RECUSAD\w*|DESAPROVAD\w*|"
+    r"INDEFERID\w*|INVALIDAD\w*|REFUGAD\w*|DESCARTAD\w*|"
+    r"NAO\s+APROVAD\w*|NAO\s+APROV\w*|NAO\s+LIBERAD\w*|"
+    r"NAO\s+CONFORM\w*|NAO\s+APT\w*|NAO\s+ACEIT\w*|"
+    r"CANCELAD\w*|BLOQUEAD\w*|NOK)\b"
+)
+
+
+def _classificar_peca_pmp(status, data_expedicao=None):
+    """PMP O/P: expedição com data prevalece sobre STATUS de execução.
+
+    - O com data -> FINALIZADA_EXPEDIDA;
+    - O sem data e P reprovado/não aprovado -> NAO_APROVADA;
+    - O sem data e P sem reprovação -> EM_FABRICACAO.
+    DATA DE FINALIZAÇÃO (N) não substitui expedição (O).
+    """
+    if pd.notna(_data(data_expedicao)):
+        return "FINALIZADA_EXPEDIDA"
+    if _STATUS_NAO_APROVADOS.search(_normalizar_texto(status)):
+        return "NAO_APROVADA"
+    return "EM_FABRICACAO"
+
+
+def _status_em_producao(valor, data_expedicao=None):
+    """Compatibilidade: decisão real é PMP O (expedição) + P (status)."""
+    return _classificar_peca_pmp(valor, data_expedicao) == "EM_FABRICACAO"
 
 
 def _colunas_pmp(pmp):
     """
     Layout atual do PMP:
     A OP | C CÓDIGO | D DESCRIÇÃO | M DATA ENTREGA CLIENTE |
-    P STATUS | Q UNIFICADO.
+    O DATA DE EXPEDIÇÃO | P STATUS | Q UNIFICADO.
 
     Os nomes dos cabeçalhos são sempre priorizados. As posições entram apenas
     como fallback para manter compatibilidade com o relatório atual.
@@ -101,6 +124,12 @@ def _colunas_pmp(pmp):
                 "DT ENTREGA",
             ],
             fallback_idx=12,
+        ),
+        "expedicao": _localizar_coluna(
+            pmp,
+            ["DATA DE EXPEDIÇÃO", "DATA EXPEDIÇÃO", "DATA DE EXPEDICAO",
+             "DATA EXPEDICAO", "DT EXPEDIÇÃO", "DT EXPEDICAO"],
+            fallback_idx=14,
         ),
         "status": _localizar_coluna(
             pmp,
@@ -199,7 +228,26 @@ def _preparar_pmp(pmp, codigos_h001):
     dados = pmp.copy()
 
     dados["STATUS"] = dados.iloc[:, col["status"]].map(_normalizar_texto)
-    dados = dados[dados["STATUS"].map(_status_em_producao)].copy()
+    expedicao_bruta = dados.iloc[:, col["expedicao"]].map(_texto)
+    valores_sem_data = {"", "NI", "N/I", "N/A", "NA", "-", "--", "SEM DATA",
+                        "NAO INFORMADO", "NAO INFORMADA"}
+    sem_data = expedicao_bruta.map(
+        lambda x: _normalizar_texto(x) in valores_sem_data
+    )
+    dados["DATA DE EXPEDIÇÃO"] = dados.iloc[:, col["expedicao"]].map(_data)
+    datas_invalidas = ~sem_data & dados["DATA DE EXPEDIÇÃO"].isna()
+    if datas_invalidas.any():
+        exemplos = [int(i) + 2 for i in dados.index[datas_invalidas][:5]]
+        raise ValueError(
+            "PMP: DATA DE EXPEDIÇÃO (coluna O) preenchida com valor que "
+            f"não é uma data válida; linhas de origem: {exemplos}. "
+            "A fonte anterior deve ser preservada."
+        )
+    dados["_SITUACAO_FABRICACAO"] = [
+        _classificar_peca_pmp(status, exp)
+        for status, exp in zip(dados["STATUS"], dados["DATA DE EXPEDIÇÃO"])
+    ]
+    dados = dados[dados["_SITUACAO_FABRICACAO"].eq("EM_FABRICACAO")].copy()
 
     dados["ORDEM DE PRODUÇÃO"] = dados.iloc[:, col["ordem"]].map(_texto)
     dados["CÓDIGO INICIAL"] = dados.iloc[:, col["codigo_alternativo"]].map(_codigo)
@@ -241,6 +289,7 @@ def _preparar_pmp(pmp, codigos_h001):
             "CÓDIGO INICIAL",
             "FONTE CÓDIGO",
             "DATA DE ENTREGA",
+            "DATA DE EXPEDIÇÃO",
             "STATUS",
         ]
     ].copy()
