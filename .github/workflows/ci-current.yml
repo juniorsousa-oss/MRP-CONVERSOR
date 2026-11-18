@@ -188,19 +188,24 @@ jobs:
           print("setta-drawer-deterministic-ok")
           PY
 
-      - name: TC/TP PMP em produção smoke test
+      - name: TC/TP PMP regra de expedição O e aprovação P
         run: |
           python - <<'PY'
-          from conversores.tc_tp import _status_em_producao
-
+          from conversores.tc_tp import _status_em_producao, _classificar_peca_pmp
           assert _status_em_producao("PROGRAMADO") is True
           assert _status_em_producao("ATRASADO") is True
-          assert _status_em_producao("EXEC. ATRASADO") is False
-          assert _status_em_producao("EXEC. NO PRAZO") is False
-          assert _status_em_producao("EXEC. ADIANTADO") is False
+          assert _status_em_producao("EXEC. ATRASADO") is True
+          assert _status_em_producao("EXEC. NO PRAZO") is True
+          assert _status_em_producao("EXEC. ADIANTADO") is True
+          assert _status_em_producao("EXEC. ADIANTADO", "18/11/2026") is False
           assert _status_em_producao("REPROVADO") is False
-          print("tctp-pmp-em-producao-ok")
+          assert _status_em_producao("NÃO APROVADA") is False
+          assert _classificar_peca_pmp("REPROVADA", "18/11/2026") == "FINALIZADA_EXPEDIDA"
+          print("tctp-pmp-expedicao-o-status-p-ok")
           PY
+
+      - name: Testar classificação TC/TP O/P, BOM e reprovação
+        run: PYTHONPATH=. python -m unittest discover -s tests -p 'test_tctp_pmp_expedicao.py' -v
 
       - name: SETTA standard page layout smoke test
         run: |
