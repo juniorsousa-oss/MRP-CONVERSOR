@@ -64,6 +64,9 @@ _STATUS_NAO_APROVADOS = re.compile(
     r"INDEFERID\w*|INVALIDAD\w*|REFUGAD\w*|DESCARTAD\w*|"
     r"NAO\s+APROVAD\w*|NAO\s+APROV\w*|NAO\s+LIBERAD\w*|"
     r"NAO\s+CONFORM\w*|NAO\s+APT\w*|NAO\s+ACEIT\w*|"
+    r"SEM\s+APROVACAO|PENDENT\w*\s+(?:DE\s+)?APROV\w*|"
+    r"AGUARDAND\w*\s+(?:DE\s+)?APROV\w*|"
+    r"NAO\s+HOMOLOGAD\w*|"
     r"CANCELAD\w*|BLOQUEAD\w*|NOK)\b"
 )
 
