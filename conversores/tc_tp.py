@@ -497,7 +497,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
 
     if not sem_bom.empty:
         avisos.append(
-            f"{len(sem_bom)} OP(s) em fabricação pela regra O/P não possuem BOM no H001 
+            f"{len(sem_bom)} OP(s) em fabricação pela regra O/P não possuem BOM no H001 "
             "e foram mantidas no relatório em uma única linha, com material e "
             "quantidades zerados."
         )
