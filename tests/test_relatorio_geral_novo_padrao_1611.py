@@ -81,6 +81,35 @@ class ContratoMESNovo(unittest.TestCase):
         self.assertEqual(linha["Qtd. atendida"], 4)
         self.assertEqual(linha["Pendência"], 3)
 
+    def test_valor_minimo_positivo_preservado_sem_somar_lotes(self):
+        resultado = self.processar([
+            dados(Lote="062088", **{"Qtd. necessária": 4,
+                                   "Qtd. atendida": 0,
+                                   "Qtd. pendências": 4,
+                                   "Valor mínimo encontrado": "12,50"}),
+            dados(Lote="062136", **{"Qtd. necessária": 2,
+                                   "Qtd. atendida": 0,
+                                   "Qtd. pendências": 2,
+                                   "Valor mínimo encontrado": 11.25}),
+            dados(Lote="062137", **{"Qtd. necessária": 1,
+                                   "Qtd. atendida": 0,
+                                   "Qtd. pendências": 1,
+                                   "Valor mínimo encontrado": 0}),
+        ])
+        self.assertEqual(resultado["erros"], [])
+        linha = resultado["tratado"].iloc[0]
+        self.assertEqual(linha["Qtd. necessária"], 7)
+        self.assertEqual(linha["Pendência"], 7)
+        self.assertEqual(linha["Valor mínimo encontrado"], 11.25)
+
+    def test_layout_mais_antigo_sem_preco_continua_compativel(self):
+        resultado = self.processar([
+            dados(**{"Qtd. necessária": 3, "Qtd. atendida": 1,
+                     "Qtd. pendências": 2}),
+        ])
+        self.assertEqual(resultado["erros"], [])
+        self.assertEqual(resultado["tratado"].iloc[0]["Valor mínimo encontrado"], 0)
+
     def test_arquivo_antigo_ainda_utiliza_ultima_pendencia(self):
         resultado = self.processar([
             dados(**{"Qtd. necessária": 3, "Qtd. atendida": 2,
