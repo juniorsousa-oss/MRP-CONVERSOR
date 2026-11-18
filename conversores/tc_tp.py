@@ -312,24 +312,47 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
     codigos_h001 = set(bom["CÓDIGO PRODUTO"].unique())
     pmp = _preparar_pmp(pmp_bruto, codigos_h001)
 
+    colunas_pmp = _colunas_pmp(pmp_bruto)
+    col_o = pmp_bruto.iloc[:, colunas_pmp["expedicao"]].map(_data)
+    col_p = pmp_bruto.iloc[:, colunas_pmp["status"]].map(_normalizar_texto)
+    estados = pd.Series(
+        [_classificar_peca_pmp(status, exp) for status, exp in zip(col_p, col_o)],
+        index=pmp_bruto.index,
+    )
+    total_expedidas = int(estados.eq("FINALIZADA_EXPEDIDA").sum())
+    total_nao_aprovadas = int(estados.eq("NAO_APROVADA").sum())
+    total_fabricacao = int(estados.eq("EM_FABRICACAO").sum())
+    if total_nao_aprovadas:
+        avisos.append(
+            f"PMP: {total_nao_aprovadas} OP(s) sem data de expedição com "
+            "status de reprovação/não aprovação foram excluídas da oferta "
+            "de fabricação e destacadas nas inconsistências."
+        )
+    avisos.append(
+        f"PMP — regra O/P: {total_expedidas} expedida(s); "
+        f"{total_fabricacao} em fabricação; "
+        f"{total_nao_aprovadas} não aprovada(s)."
+    )
+
     if len(pmp_bruto) > 0 and pmp.empty:
         status_lidos = _status_encontrados_pmp(pmp_bruto)
         detalhe = ", ".join(status_lidos) if status_lidos else "nenhum status identificado"
         erros.append(
-            "Nenhuma OP com STATUS = PROGRAMADO ou ATRASADO foi encontrada no PMP. "
+            "Nenhuma OP elegível foi encontrada no PMP pela regra O/P: "
+            "coluna O sem data de expedição e coluna P sem reprovação. "
             f"Status identificados: {detalhe}."
         )
 
     if not pmp.empty and pmp["DATA DE ENTREGA"].notna().sum() == 0:
         erros.append(
-            "As OPs em produção (PROGRAMADO/ATRASADO) foram encontradas, porém nenhuma DATA ENTREGA CLIENTE "
+            "As OPs em fabricação (sem expedição e sem reprovação) foram encontradas, porém nenhuma DATA ENTREGA CLIENTE "
             "foi reconhecida. A exportação foi bloqueada para evitar relatório sem datas."
         )
 
     if len(h001_bruto) > 0 and bom.empty:
         avisos.append(
             "O H001 foi lido, mas nenhuma BOM válida foi encontrada. "
-            "As OPs em produção (PROGRAMADO/ATRASADO) serão mantidas com uma linha e material zerado."
+            "As OPs em fabricação elegíveis pela regra O/P serão mantidas com uma linha e material zerado."
         )
 
     vinculos = pmp.merge(bom, on="CÓDIGO PRODUTO", how="left", indicator=True)
@@ -471,7 +494,7 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
 
     if not sem_bom.empty:
         avisos.append(
-            f"{len(sem_bom)} OP(s) com STATUS = PROGRAMADO/ATRASADO não possuem BOM no H001 "
+            f"{len(sem_bom)} OP(s) em fabricação pela regra O/P não possuem BOM no H001 
             "e foram mantidas no relatório em uma única linha, com material e "
             "quantidades zerados."
         )
@@ -499,6 +522,27 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
             }
         )
 
+    # Reprovação não é finalização nem produção válida. Rastreabilidade
+    # por OP evita que uma peça rejeitada seja confundida com expedida.
+    if total_nao_aprovadas:
+        reprovadas = pmp_bruto.loc[estados.eq("NAO_APROVADA")]
+        for _, linha in reprovadas.iterrows():
+            op = _texto(linha.iloc[colunas_pmp["ordem"]])
+            codigo = _codigo(linha.iloc[colunas_pmp["codigo_alternativo"]])
+            unificado = _codigo(linha.iloc[colunas_pmp["unificado"]])
+            situacao = _normalizar_texto(linha.iloc[colunas_pmp["status"]])
+            inconsistencias.append({
+                "TIPO": "PEÇA NÃO APROVADA",
+                "ORDEM DE PRODUÇÃO": op,
+                "CÓDIGO UNIFICADO (Q)": unificado,
+                "CÓDIGO INICIAL (C)": codigo,
+                "CÓDIGO EXIBIDO": codigo,
+                "MENSAGEM": (
+                    f"PMP O sem data; P={situacao}. "
+                    "Peça fora da oferta de fabricação; não é finalizada/expedida."
+                ),
+            })
+
     validacao = pd.DataFrame(inconsistencias)
     if validacao.empty:
         validacao = pd.DataFrame(
@@ -516,6 +560,9 @@ def processar_tc_tp(pmp_bruto, h001_bruto):
         "linhas_pmp_brutas": len(pmp_bruto),
         "ofs_programadas": len(pmp),
         "ofs_em_producao": len(pmp),
+        "ofs_finalizadas_expedidas": total_expedidas,
+        "ofs_nao_aprovadas": total_nao_aprovadas,
+        "ofs_elegiveis_sem_expedicao": total_fabricacao,
         "ofs_com_bom": base_com_bom["ORDEM DE PRODUÇÃO"].nunique(),
         "linhas_bom": len(bom),
         "linhas_resultado": len(base),
