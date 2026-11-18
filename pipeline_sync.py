@@ -109,6 +109,12 @@ def get_state(report_type: str) -> dict:
         # Revisão 10: preserva Valor mínimo encontrado do MES por produto/OP,
         # mantendo cálculo de necessidade, atendimento e pendência da v9.
         versions["revisao_calculo_relatorio_geral"] = 10
+    if report_type == "MRP — TC/TP":
+        # Revisão 3: fabricação é OP com coluna O (expedição) vazia
+        # e coluna P sem reprovação/não aprovação. OPs expedidas saem da
+        # oferta, independentemente de status EXEC. e as reprovadas
+        # são auditadas sem compor materiais da BOM.
+        versions["revisao_elegibilidade_pmp_expedicao_o_status_p"] = 3
     if report_type == "Saldo em Estoque":
         # Revisão 3: além dos decimais, elimina posições ENDEREÇO com
         # saldo zero da base tratada, preservando o bruto auditável.
